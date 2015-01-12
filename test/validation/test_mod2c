@@ -1,0 +1,52 @@
+#!/bin/sh
+
+# usage: test_mod2c MOD2C MODFILE CFILE
+
+if [ $# -ne 3 ]; then
+    echo 'usage: test_mod2c MOD2C MODFILE CFILE' >&2
+    exit 1
+fi
+
+mod2c="$1"
+modinput="$2"
+cmpfile="$3"
+
+# mod2c writes to the directory in which it finds
+# the MOD file, so make a temporary directory for
+# this purpose.
+
+tmpdir=$(mktemp -d -t tmp.XXXXXXXXXX)
+
+function cleanup {
+    if [ -d "$tmpdir" ]; then
+        rm -r "$tmpdir"
+    fi
+}
+
+trap cleanup EXIT
+
+function realpath {
+    echo "$(cd "$(dirname "$1")"; pwd)/$(basename "$1")"
+}
+
+cp "$modinput" "$tmpdir"
+modpfx=$(basename "$modinput" .mod)
+
+cp "$cmpfile" "$tmpdir/_check"
+
+mod2c="$(realpath "$mod2c")"
+( cd "$tmpdir"; "$mod2c" "$modpfx" )
+
+if [ ! -e "$tmpdir/$modpfx".c ]; then
+    echo "no output file generated" >&2
+    exit 2
+fi
+
+if diff -q "$cmpfile" "$tmpdir/_check"; then
+    echo "ok"
+    exit 0
+else
+    echo "files differ"
+    exit 3
+fi
+
