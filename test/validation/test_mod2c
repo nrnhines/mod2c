@@ -42,11 +42,10 @@ if [ ! -e "$tmpdir/$modpfx".c ]; then
     exit 2
 fi
 
-if diff -q "$cmpfile" "$tmpdir/_check"; then
+if diff "$tmpdir/$modpfx".c "$tmpdir/_check"; then
     echo "ok"
     exit 0
 else
-    echo "files differ"
     exit 3
 fi
 

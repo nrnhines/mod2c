@@ -1,0 +1,5 @@
+The .mod files under mod/ and the pre-converted .c files in this
+test directory are present only for mod2c validation purposes.
+
+They should not be regarded as reflecting the current state of
+production modules.

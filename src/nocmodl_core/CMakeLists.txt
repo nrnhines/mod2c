@@ -25,3 +25,6 @@ add_executable(nocmodl_core
     ${NOCMODL_CORE_SOURCES}
     ${BISON_diffeq_OUTPUTS} ${BISON_parse1_OUTPUTS}
     ${FLEX_lex_OUTPUTS})
+
+install(TARGETS nocmodl_core DESTINATION bin)
+
