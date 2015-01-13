@@ -32,3 +32,6 @@ add_subdirectory(src/nocmodl_core)
 add_subdirectory(test/validation)
 
 install(FILES share/nrnunits.lib DESTINATION share)
+
+include(CommonCPack)
+
