@@ -29,10 +29,17 @@ function realpath {
     echo "$(cd "$(dirname "$1")"; pwd)/$(basename "$1")"
 }
 
+
 cp "$modinput" "$tmpdir"
 modpfx=$(basename "$modinput" .mod)
 
-cp "$cmpfile" "$tmpdir/_check"
+function filter {
+    # some paths are hardcoded into reference .mods
+    # so apply a canonicalization filter for comparison
+    perl -pe 's/(ivoc_help\S+\s+\S+\s+\S+\s+)\S+(\\n")/$1$2/' "$1"
+}
+
+filter "$cmpfile" > "$tmpdir/_check"
 
 mod2c="$(realpath "$mod2c")"
 ( cd "$tmpdir"; "$mod2c" "$modpfx" )
@@ -42,7 +49,8 @@ if [ ! -e "$tmpdir/$modpfx".c ]; then
     exit 2
 fi
 
-if diff "$tmpdir/$modpfx".c "$tmpdir/_check"; then
+filter "$tmpdir/$modpfx".c > "$tmpdir/_out"
+if diff "$tmpdir/_out" "$tmpdir/_check"; then
     echo "ok"
     exit 0
 else
