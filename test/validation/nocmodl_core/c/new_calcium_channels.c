@@ -292,6 +292,8 @@ extern void _cvode_abstol( Symbol**, double*, int);
  void _new_calcium_channels_reg() {
 	int _vectorized = 1;
   _initlists();
+ _mechtype = nrn_get_mechtype(_mechanism[1]);
+ if (_mechtype == -1) return;
  _ca_type = nrn_get_mechtype("ca_ion"); _k_type = nrn_get_mechtype("k_ion"); 
 #if 0 /*BBCORE*/
  	ion_reg("ca", -10000.);
@@ -301,7 +303,6 @@ extern void _cvode_abstol( Symbol**, double*, int);
  
 #endif /*BBCORE*/
  	register_mech(_mechanism, nrn_alloc,nrn_cur, nrn_jacob, nrn_state, nrn_init, hoc_nrnpointerindex, 1);
- _mechtype = nrn_get_mechtype(_mechanism[1]);
   hoc_register_prop_size(_mechtype, _psize, _ppsize);
  }
  static double FARADAY = 96.4853;

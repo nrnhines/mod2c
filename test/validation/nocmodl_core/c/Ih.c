@@ -166,12 +166,13 @@ extern void _cvode_abstol( Symbol**, double*, int);
  void _Ih_reg() {
 	int _vectorized = 1;
   _initlists();
+ _mechtype = nrn_get_mechtype(_mechanism[1]);
+ if (_mechtype == -1) return;
  
 #if 0 /*BBCORE*/
  
 #endif /*BBCORE*/
  	register_mech(_mechanism, nrn_alloc,nrn_cur, nrn_jacob, nrn_state, nrn_init, hoc_nrnpointerindex, 1);
- _mechtype = nrn_get_mechtype(_mechanism[1]);
   hoc_register_prop_size(_mechtype, _psize, _ppsize);
  }
 static char *modelname = "";
