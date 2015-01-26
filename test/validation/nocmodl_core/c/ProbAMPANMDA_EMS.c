@@ -301,6 +301,8 @@ extern void _cvode_abstol( Symbol**, double*, int);
  void _ProbAMPANMDA_EMS_reg() {
 	int _vectorized = 1;
   _initlists();
+ _mechtype = nrn_get_mechtype(_mechanism[1]);
+ if (_mechtype == -1) return;
  
 #if 0 /*BBCORE*/
  
@@ -310,7 +312,6 @@ extern void _cvode_abstol( Symbol**, double*, int);
 	 hoc_nrnpointerindex,
 	 NULL/*_hoc_create_pnt*/, NULL/*_hoc_destroy_pnt*/, /*_member_func,*/
 	 1);
- _mechtype = nrn_get_mechtype(_mechanism[1]);
    hoc_reg_bbcore_read(_mechtype, bbcore_read);
   hoc_register_prop_size(_mechtype, _psize, _ppsize);
  pnt_receive[_mechtype] = _net_receive;

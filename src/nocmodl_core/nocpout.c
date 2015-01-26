@@ -1029,8 +1029,11 @@ extern void _cvode_abstol( Symbol**, double*, int);\n\n\
 #endif
 
     if (suffix[0]) { /* not "nothing" */
-
 #if BBCORE
+	Lappendstr(defs_list, "_mechtype = nrn_get_mechtype(_mechanism[1]);\n");
+	Lappendstr(defs_list, "if (_mechtype == -1) return;\n");
+	Lappendstr(defs_list, "_nrn_layout_reg(_mechtype, LAYOUT);\n");
+
 	ITERATE(q, useion) {
 		sion = SYM(q);
 		Sprintf(buf, "_%s_type = nrn_get_mechtype(\"%s_ion\");",sion->name, sion->name);
@@ -1083,9 +1086,8 @@ extern void _cvode_abstol( Symbol**, double*, int);\n\n\
 		}
 	}
 #endif
-	Lappendstr(defs_list, "_mechtype = nrn_get_mechtype(_mechanism[1]);\n");
-	Lappendstr(defs_list, "_nrn_layout_reg(_mechtype, LAYOUT);\n");
 #if !BBCORE
+	Lappendstr(defs_list, "_mechtype = nrn_get_mechtype(_mechanism[1]);\n");
 	lappendstr(defs_list, "    _nrn_setdata_reg(_mechtype, _setdata);\n");
 #endif
 	if (vectorize && thread_mem_init_list->next != thread_mem_init_list) {

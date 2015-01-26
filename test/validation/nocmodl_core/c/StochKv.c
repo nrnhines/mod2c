@@ -281,6 +281,8 @@ extern void _cvode_abstol( Symbol**, double*, int);
  void _StochKv_reg() {
 	int _vectorized = 1;
   _initlists();
+ _mechtype = nrn_get_mechtype(_mechanism[1]);
+ if (_mechtype == -1) return;
  _k_type = nrn_get_mechtype("k_ion"); 
 #if 0 /*BBCORE*/
  	ion_reg("k", -10000.);
@@ -288,7 +290,6 @@ extern void _cvode_abstol( Symbol**, double*, int);
  
 #endif /*BBCORE*/
  	register_mech(_mechanism, nrn_alloc,nrn_cur, nrn_jacob, nrn_state, nrn_init, hoc_nrnpointerindex, 1);
- _mechtype = nrn_get_mechtype(_mechanism[1]);
      _nrn_thread_table_reg(_mechtype, _check_table_thread);
    hoc_reg_bbcore_read(_mechtype, bbcore_read);
   hoc_register_prop_size(_mechtype, _psize, _ppsize);
