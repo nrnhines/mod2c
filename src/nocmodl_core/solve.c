@@ -289,7 +289,7 @@ fprintf(stderr, "Notice: DISCRETE is not thread safe.\n");
 			Sprintf(buf, " %s();\n", fun->name);
 			replacstr(qsol, buf);
 #if VECTORIZE
-	Sprintf(buf, "{ %s(_p, _ppvar, _thread, _nt); }\n",
+	Sprintf(buf, "{ %s(_threadargs_); }\n",
 		fun->name);
 	vectorize_substitute(qsol, buf);
 #endif

@@ -324,7 +324,7 @@ void massagekinetic(q1, q2, q3, q4, sensused) /*KINETIC NAME stmtlist '}'*/
 #if VECTORIZE
 if (vectorize) {
 	kin_vect1(q1, q2, q4);
-vectorize_substitute(qv, "(void* _so, double* _rhs, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt)\n");
+vectorize_substitute(qv, "(void* _so, double* _rhs, _threadargsproto_)\n");
 }
 #endif
 	qv = insertstr(q3, "{_reset=0;\n");
@@ -1521,14 +1521,14 @@ void cvode_kinetic(qsol, fun, numeqn, listnum)
 	Lappendstr(procfunc, "\n/*CVODE ode begin*/\n");
 	sprintf(buf, "static int _ode_spec%d() {_reset=0;{\n", fun->u.i);
 	Lappendstr(procfunc, buf);
-	sprintf(buf, "static int _ode_spec%d(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt) {int _reset=0;{\n", fun->u.i);
+	sprintf(buf, "static int _ode_spec%d(_threadargsproto_) {int _reset=0;{\n", fun->u.i);
 	vectorize_substitute(procfunc->prev, buf);
 	copyitems(cvode_sbegin, cvode_send, procfunc->prev);
 
 	Lappendstr(procfunc, "\n/*CVODE matsol*/\n");
 	sprintf(buf, "static int _ode_matsol%d() {_reset=0;{\n", fun->u.i);
 	Lappendstr(procfunc, buf);
-	sprintf(buf, "static int _ode_matsol%d(void* _so, double* _rhs, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt) {int _reset=0;{\n", fun->u.i);
+	sprintf(buf, "static int _ode_matsol%d(void* _so, double* _rhs, _threadargsproto_) {int _reset=0;{\n", fun->u.i);
 	vectorize_substitute(procfunc->prev, buf);
 	cvode_flag = 1;
 	kinetic_implicit(fun, "dt", "ZZZ");

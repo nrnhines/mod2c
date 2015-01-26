@@ -397,6 +397,8 @@ void c_out(const char* prefix)
 	P("\n_initlists() {\n");
 #endif
 	P(" int _i; static int _first = 1;\n");
+	P(" int _cntml=0;\n");
+	P(" int _iml=0;\n");
 	P("  if (!_first) return;\n");
 	printlist(initlist);
 	P("_first = 0;\n}\n");
@@ -557,6 +559,25 @@ if (vectorize) {
 
 #if VECTORIZE
 /* when vectorize = 1 */
+
+static void pr_layout_for_p(int ivdep) {
+	P("#if LAYOUT == 1 /*AoS*/\n");
+	P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
+	P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
+	P("#endif\n");
+	P("#if LAYOUT == 0 /*SoA*/\n");
+	P(" _p = _ml->_data; _ppvar = _ml->_pdata;\n");
+	if (ivdep) {
+		P("#pragma ivdep\n");
+	}
+	P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
+	P("#endif\n");
+	P("#if LAYOUT > 1 /*AoSoA*/\n");
+	P("#error AoSoA not implemented.\n");
+	P("#endif\n");
+}
+
+
 void c_out_vectorize(const char* prefix)
 {
 	Item *q;
@@ -593,7 +614,7 @@ void c_out_vectorize(const char* prefix)
 
 	/* Initialization function must always be present */
 
-	P("\nstatic void initmodel(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt) {\n  int _i; double _save;");
+	P("\nstatic void initmodel(_threadargsproto_) {\n  int _i; double _save;");
 	P("{\n");
 	initstates();
 	printlist(initfunc);
@@ -609,14 +630,11 @@ void c_out_vectorize(const char* prefix)
 //        HPM_helper_start("nrn_init_",prefix);
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
 	  P("double _v; int* _ni; int _iml, _cntml;\n");
-	  P("#if CACHEVEC\n");
 	  P("    _ni = _ml->_nodeindices;\n");
-	  P("#endif\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
 	/*check_tables();*/
-	  P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
-	  P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
+	  pr_layout_for_p(0);
 	check_tables();
 	if (debugging_ && net_receive_) {
 		P(" _tsav = -1e20;\n");
@@ -624,17 +642,17 @@ void c_out_vectorize(const char* prefix)
 	if (!artificial_cell) {ext_vdef();}
 	if (!artificial_cell) {P(" v = _v;\n");}
 	printlist(get_ion_variables(1));
-	P(" initmodel(_p, _ppvar, _thread, _nt);\n");
+	P(" initmodel(_threadargs_);\n");
 	printlist(set_ion_variables(2));
 	P("}\n");
   //      HPM_helper_stop("nrn_init_",prefix);
 	P("}\n");
 
 	/* standard modl EQUATION without solve computes current */
-	P("\nstatic double _nrn_current(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double _v){double _current=0.;v=_v;");
+	P("\nstatic double _nrn_current(_threadargsproto_, double _v){double _current=0.;v=_v;");
 #if CVODE
 	if (cvode_nrn_current_solve_) {
-		fprintf(fcout, "if (cvode_active_) { %s(_p, _ppvar, _thread, _nt); }\n", cvode_nrn_current_solve_->name);
+		fprintf(fcout, "if (cvode_active_) { %s(_threadargs_); }\n", cvode_nrn_current_solve_->name);
 	}
 #endif
 	P("{");
@@ -655,13 +673,10 @@ void c_out_vectorize(const char* prefix)
 //        HPM_helper_start("nrn_cur_",prefix);
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
 	  P("int* _ni; double _rhs, _v; int _iml, _cntml;\n");
-	  P("#if CACHEVEC\n");
 	  P("    _ni = _ml->_nodeindices;\n");
-	  P("#endif\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
-	  P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
-	  P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
+	  pr_layout_for_p(1);
 	  ext_vdef();
 	if (currents->next != currents) {
 	  printlist(get_ion_variables(0));
@@ -670,16 +685,16 @@ void c_out_vectorize(const char* prefix)
 	  P(buf);
 	}
 	  if (cvode_nrn_cur_solve_) {
-	  	fprintf(fcout, "if (cvode_active_) { %s(_p, _ppvar, _thread, _nt); }\n", cvode_nrn_cur_solve_->name);
+	  	fprintf(fcout, "if (cvode_active_) { %s(_threadargs_); }\n", cvode_nrn_cur_solve_->name);
 	  }
    if (currents->next != currents) {
 #endif
-	  P(" _g = _nrn_current(_p, _ppvar, _thread, _nt, _v + .001);\n");
+	  P(" _g = _nrn_current(_threadargs_, _v + .001);\n");
 	  printlist(begin_dion_stmt());
 	if (state_discon_list_) {
 	  P(" state_discon_flag_ = 1; _rhs = _nrn_current(_v); state_discon_flag_ = 0;\n");
 	}else{
-	  P(" _rhs = _nrn_current(_p, _ppvar, _thread, _nt, _v);\n");
+	  P(" _rhs = _nrn_current(_threadargs_, _v);\n");
 	}
 	  printlist(end_dion_stmt(".001"));
 	  P(" _g = (_g - _rhs)/.001;\n");
@@ -704,7 +719,15 @@ void c_out_vectorize(const char* prefix)
 #if CACHEVEC == 0
 		P("	NODERHS(_nd) -= _rhs;\n");
 #else
-		P("	VEC_RHS(_ni[_iml]) -= _rhs;\n");
+		if (point_process) {
+			P("	_nt->_shadow_rhs[_iml] = _rhs;\n\
+ }\n\
+ for (_iml = 0; _iml < _cntml; ++_iml) {\n\
+   VEC_RHS(_ni[_iml]) -= _nt->_shadow_rhs[_iml];\n\
+");
+		}else{
+			P("	VEC_RHS(_ni[_iml]) -= _rhs;\n");
+		}
 #endif
 	}
    }
@@ -717,13 +740,10 @@ void c_out_vectorize(const char* prefix)
 //          HPM_helper_start("nrn_jacob_",prefix);
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
 	  P("int* _ni; int _iml, _cntml;\n");
-	  P("#if CACHEVEC\n");
 	  P("    _ni = _ml->_nodeindices;\n");
-	  P("#endif\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
-	  P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
-	  P(" _p = _ml->_data + _iml*_psize;\n");
+	  pr_layout_for_p(0);
 	if (electrode_current) {
 #if CACHEVEC == 0
 		P("	NODED(_nd) -= _g;\n");
@@ -754,13 +774,10 @@ void c_out_vectorize(const char* prefix)
 	if (nrnstate || currents->next == currents) {
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
 	  P("double _v = 0.0; int* _ni; int _iml, _cntml;\n");
-	  P("#if CACHEVEC\n");
 	  P("    _ni = _ml->_nodeindices;\n");
-	  P("#endif\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
-	  P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
-	  P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
+	  pr_layout_for_p(1);
 	  ext_vdef();
 	  P(" v=_v;\n{\n");
 	  printlist(get_ion_variables(1));
@@ -787,6 +804,8 @@ void c_out_vectorize(const char* prefix)
 	P("\nstatic void _initlists(){\n");
 	P(" double _x; double* _p = &_x;\n");
 	P(" int _i; static int _first = 1;\n");
+	P(" int _cntml=0;\n");
+	P(" int _iml=0;\n");
 	P("  if (!_first) return;\n");
 	printlist(initlist);
 	P("_first = 0;\n}\n");

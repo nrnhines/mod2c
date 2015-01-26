@@ -406,9 +406,9 @@ void vectorize_scan_for_func(Item* q1, Item* q2) {
 				if (q->next->itemtype == SYMBOL && strcmp(SYM(q->next)->name, "(") == 0) {
 					int b = func_arg_examine(q->next, q2);
 					if (b == 0) { /* no args */
-						vectorize_substitute(q->next, "(_p, _ppvar, _thread, _nt");
+						vectorize_substitute(q->next, "(_threadargs_");
 					}else if (b == 1) { /* real args */
-						vectorize_substitute(q->next, "(_p, _ppvar, _thread, _nt,");
+						vectorize_substitute(q->next, "(_threadargs_,");
 					} /* else no _p.._nt already there */
 				}
 			}
@@ -583,12 +583,12 @@ int check_tables_threads(List* p) {
 	Item* q;
 	if (check_table_thread_list) {
 		ITERATE(q, check_table_thread_list) {
-			sprintf(buf, "\nstatic void %s(double*, Datum*, ThreadDatum*, _NrnThread*);", STR(q));
+			sprintf(buf, "\nstatic void %s(_threadargsproto_);", STR(q));
 			lappendstr(p, buf);
 		}
-		lappendstr(p, "\nstatic void _check_table_thread(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, int _type) {\n");
+		lappendstr(p, "\nstatic void _check_table_thread(_threadargsproto_, int _type) {\n");
 		ITERATE(q, check_table_thread_list) {
-			sprintf(buf, "  %s(_p, _ppvar, _thread, _nt);\n", STR(q));
+			sprintf(buf, "  %s(_threadargs_);\n", STR(q));
 			lappendstr(p, buf);
 		}
 		lappendstr(p, "}\n");
@@ -626,7 +626,7 @@ void table_massage(tablist, qtype, qname, arglist)
 	}
 	sprintf(buf, "_check_%s();\n", fname);
 	q = lappendstr(check_table_statements, buf);
-	sprintf(buf, "_check_%s(_p, _ppvar, _thread, _nt);\n", fname);
+	sprintf(buf, "_check_%s(_threadargs_);\n", fname);
 	vectorize_substitute(q, buf);
 	/*checking*/
 	if (type == FUNCTION1) {
@@ -691,7 +691,7 @@ diag("FUNCTION or PROCEDURE containing a TABLE stmt\n",
 	vectorize_substitute(q, "");
 	Sprintf(buf, "static void _check_%s() {\n", fname);
 	q = lappendstr(procfunc, buf);
-	Sprintf(buf, "static void _check_%s(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt) {\n", fname);
+	Sprintf(buf, "static void _check_%s(_threadargsproto_) {\n", fname);
 	vectorize_substitute(q, buf);
 	Lappendstr(procfunc, " static int _maktable=1; int _i, _j, _ix = 0;\n");
 	Lappendstr(procfunc, " double _xi, _tmax;\n");
@@ -739,7 +739,7 @@ diag("FUNCTION or PROCEDURE containing a TABLE stmt\n",
 			Sprintf(buf, "   _t_%s[_i] = _f_%s(_x);\n", s->name, fname);
 			Lappendstr(procfunc, buf);
 #if VECTORIZE
-			Sprintf(buf, "   _t_%s[_i] = _f_%s(_p, _ppvar, _thread, _nt, _x);\n", s->name, fname);
+			Sprintf(buf, "   _t_%s[_i] = _f_%s(_threadargs_, _x);\n", s->name, fname);
 			vectorize_substitute(procfunc->prev, buf);
 #endif
 		}
@@ -747,7 +747,7 @@ diag("FUNCTION or PROCEDURE containing a TABLE stmt\n",
 		Sprintf(buf, "   _f_%s(_x);\n", fname);
 		Lappendstr(procfunc, buf);
 #if VECTORIZE
-		Sprintf(buf, "   _f_%s(_p, _ppvar, _thread, _nt, _x);\n", fname);
+		Sprintf(buf, "   _f_%s(_threadargs_, _x);\n", fname);
 		vectorize_substitute(procfunc->prev, buf);
 #endif
 		ITERATE(q, table) {
@@ -787,7 +787,7 @@ Sprintf(buf, "   _t_%s[_i] = %s;\n", s->name, s->name);
 			fname, arg->name);
 	Lappendstr(procfunc, buf);		
 #if VECTORIZE
-	Sprintf(buf, "%s(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double %s) {",
+	Sprintf(buf, "%s(_threadargsproto_, double %s) {",
 		fname, arg->name);
 	vectorize_substitute(procfunc->prev, buf);
 #endif
@@ -795,7 +795,7 @@ Sprintf(buf, "   _t_%s[_i] = %s;\n", s->name, s->name);
 	Sprintf(buf, "_check_%s();\n", fname);
 	q = lappendstr(procfunc, buf);
 #if VECTORIZE
-	Sprintf(buf, "\n#if 0\n_check_%s(_p, _ppvar, _thread, _nt);\n#endif\n", fname);
+	Sprintf(buf, "\n#if 0\n_check_%s(_threadargs_);\n#endif\n", fname);
 	vectorize_substitute(q, buf);
 #endif
 	if (type == FUNCTION1) {
@@ -804,7 +804,7 @@ Sprintf(buf, "   _t_%s[_i] = %s;\n", s->name, s->name);
 	Sprintf(buf, "_n_%s(%s);\n", fname, arg->name);
 	Lappendstr(procfunc, buf);
 #if VECTORIZE
-	Sprintf(buf, "_n_%s(_p, _ppvar, _thread, _nt, %s);\n", fname, arg->name);
+	Sprintf(buf, "_n_%s(_threadargs_, %s);\n", fname, arg->name);
 	vectorize_substitute(procfunc->prev, buf);
 #endif
 	if (type != FUNCTION1) {
@@ -822,7 +822,7 @@ Sprintf(buf, "   _t_%s[_i] = %s;\n", s->name, s->name);
 			fname, arg->name);
 	Lappendstr(procfunc, buf);		
 #if VECTORIZE
-	Sprintf(buf, "_n_%s(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double %s){",
+	Sprintf(buf, "_n_%s(_threadargsproto_, double %s){",
 		fname, arg->name);
 	vectorize_substitute(procfunc->prev, buf);
 #endif
@@ -837,7 +837,7 @@ Sprintf(buf, "   _t_%s[_i] = %s;\n", s->name, s->name);
 	Sprintf(buf, "_f_%s(%s);", fname, arg->name);
 	Lappendstr(procfunc, buf);
 #if VECTORIZE
-	Sprintf(buf, "_f_%s(_p, _ppvar, _thread, _nt, %s);", fname, arg->name);
+	Sprintf(buf, "_f_%s(_threadargs_, %s);", fname, arg->name);
 	vectorize_substitute(procfunc->prev, buf);
 #endif
 	if (type != FUNCTION1) {
@@ -988,7 +988,7 @@ void hocfunchack(Symbol* n, Item* qpar1, Item* qpar2, int hack)
 #if VECTORIZE
 	if (n == last_func_using_table) {
 		qp = lappendstr(procfunc, "");
-		sprintf(buf,"\n#if 1\n _check_%s(_p, _ppvar, _thread, _nt);\n#endif\n", n->name);
+		sprintf(buf,"\n#if 1\n _check_%s(_threadargs_);\n#endif\n", n->name);
 		vectorize_substitute(qp, buf);
 	}
 #endif
@@ -1020,9 +1020,9 @@ void hocfunchack(Symbol* n, Item* qpar1, Item* qpar2, int hack)
 #endif
 #if VECTORIZE
 	if (i) {
-		vectorize_substitute(qp, "_p, _ppvar, _thread, _nt,");
+		vectorize_substitute(qp, "_threadargs_,");
 	}else if (!hack) {
-		vectorize_substitute(qp, "_p, _ppvar, _thread, _nt");
+		vectorize_substitute(qp, "_threadargs_");
 	}
 #endif
 }
@@ -1069,7 +1069,7 @@ Fprintf(stderr, "Notice: Use of state_discontinuity in a NET_RECEIVE block is un
 			if (blocktype == NETRECEIVE) {
 				Insertstr(qpar1->next, "_tqitem, _args, _pnt,");
 			}else if (blocktype == INITIAL1){
-				Insertstr(qpar1->next, "_tqitem, (double*)0, _nt->_vdata[_ppvar[1]],");
+				Insertstr(qpar1->next, "_tqitem, (double*)0, _nt->_vdata[_ppvar[1*_STRIDE]],");
 			}else{
 diag("net_send allowed only in INITIAL and NET_RECEIVE blocks", (char*)0);
 			}
@@ -1101,9 +1101,9 @@ diag("net_move", " only allowed in NET_RECEIVE block");
 #else
 	q = insertstr(qpar1->next, "");
 	if (qexpr) {
-		vectorize_substitute(q, "_p, _ppvar, _thread, _nt,");
+		vectorize_substitute(q, "_threadargs_,");
 	}else{
-		vectorize_substitute(q, "_p, _ppvar, _thread, _nt");
+		vectorize_substitute(q, "_threadargs_");
 	}
 #endif
 }
