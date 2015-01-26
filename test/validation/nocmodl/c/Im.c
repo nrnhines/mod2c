@@ -6,10 +6,6 @@
 #include "scoplib_ansi.h"
 #undef PI
 #define nil 0
-#ifdef _PROF_HPM 
-void HPM_Start(const char *); 
-void HPM_Stop(const char *); 
-#endif 
 #include "md1redef.h"
 #include "section.h"
 #include "nrniv_mf.h"
@@ -202,7 +198,7 @@ extern void _cvode_abstol( Symbol**, double*, int);
  	hoc_register_cvode(_mechtype, _ode_count, _ode_map, _ode_spec, _ode_matsol);
  	hoc_register_tolerance(_mechtype, _hoc_state_tol, &_atollist);
  	hoc_register_var(hoc_scdoub, hoc_vdoub, hoc_intfunc);
- 	ivoc_help("help ?1 Im /home/yates/project/Buildyard/src/Neurodamus/build/lib/modlib/x86_64/Im.mod\n");
+ 	ivoc_help("help ?1 Im /gpfs/bbp.cscs.ch/project/proj16/kumbhar/sources/mod2c/test/validation/mod/Im.mod\n");
  hoc_register_limits(_mechtype, _hoc_parm_limits);
  hoc_register_units(_mechtype, _hoc_parm_units);
  }
@@ -415,9 +411,6 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 }
 
 static void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {
-#ifdef _PROF_HPM 
-HPM_Start("nrn_state_Im"); 
-#endif 
 double* _p; Datum* _ppvar; Datum* _thread;
 Node *_nd; double _v = 0.0; int* _ni; int _iml, _cntml;
 #if CACHEVEC
@@ -442,9 +435,6 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
   ek = _ion_ek;
  {   states(_p, _ppvar, _thread, _nt);
   } }}
-#ifdef _PROF_HPM 
-HPM_Stop("nrn_state_Im"); 
-#endif 
 
 }
 

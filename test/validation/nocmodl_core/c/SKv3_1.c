@@ -5,10 +5,6 @@
 #include <math.h>
 #include "corebluron/mech/cfile/scoplib.h"
 #undef PI
-#ifdef _PROF_HPM 
-void HPM_Start(const char *); 
-void HPM_Stop(const char *); 
-#endif 
  
 #include "corebluron/nrnoc/md1redef.h"
 #include "corebluron/nrnconf.h"
@@ -317,9 +313,6 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 }
 
 static void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {
-#ifdef _PROF_HPM 
-HPM_Start("nrn_state_SKv3_1"); 
-#endif 
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 double _v = 0.0; int* _ni; int _iml, _cntml;
 #if CACHEVEC
@@ -335,9 +328,6 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
   ek = _ion_ek;
  {   states(_p, _ppvar, _thread, _nt);
   } }}
-#ifdef _PROF_HPM 
-HPM_Stop("nrn_state_SKv3_1"); 
-#endif 
 
 }
 
