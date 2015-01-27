@@ -6,10 +6,6 @@
 #include "scoplib_ansi.h"
 #undef PI
 #define nil 0
-#ifdef _PROF_HPM 
-void HPM_Start(const char *); 
-void HPM_Stop(const char *); 
-#endif 
 #include "md1redef.h"
 #include "section.h"
 #include "nrniv_mf.h"
@@ -244,7 +240,7 @@ extern void _cvode_abstol( Symbol**, double*, int);
  pnt_receive[_mechtype] = _net_receive;
  pnt_receive_size[_mechtype] = 1;
  	hoc_register_var(hoc_scdoub, hoc_vdoub, hoc_intfunc);
- 	ivoc_help("help ?1 InhPoissonStim /home/yates/project/Buildyard/src/Neurodamus/build/lib/modlib/x86_64/netstim_inhpoisson.mod\n");
+ 	ivoc_help("help ?1 InhPoissonStim /gpfs/bbp.cscs.ch/project/proj16/kumbhar/sources/mod2c/test/validation/mod/netstim_inhpoisson.mod\n");
  hoc_register_limits(_mechtype, _hoc_parm_limits);
  hoc_register_units(_mechtype, _hoc_parm_units);
  }
@@ -700,9 +696,6 @@ static double _nrn_current(double* _p, Datum* _ppvar, Datum* _thread, _NrnThread
 }
 
 static void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {
-#ifdef _PROF_HPM 
-HPM_Start("nrn_state_netstim_inhpoisson"); 
-#endif 
 double* _p; Datum* _ppvar; Datum* _thread;
 Node *_nd; double _v = 0.0; int* _ni; int _iml, _cntml;
 #if CACHEVEC
@@ -716,9 +709,6 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
  v=_v;
 {
 }}
-#ifdef _PROF_HPM 
-HPM_Stop("nrn_state_netstim_inhpoisson"); 
-#endif 
 
 }
 

@@ -4,7 +4,6 @@
 #include "modl.h"
 #include "parse1.h"
 #include "symbol.h"
-#include "hpm_profiling.h"
 
 #define CACHEVEC 1
 
@@ -623,7 +622,6 @@ void c_out_vectorize(const char* prefix)
 	P("#include <stdio.h>\n#include <stdlib.h>\n#include <math.h>\n#include \"scoplib_ansi.h\"\n");
 	P("#undef PI\n");
 	P("#define nil 0\n");
-        HPM_helper_include();
 P("#include \"md1redef.h\"\n");
 P("#include \"section.h\"\n");
 P("#include \"nrniv_mf.h\"\n");
@@ -668,7 +666,6 @@ P("#include \"md2redef.h\"\n");
 
 	/* generation of initmodel interface */
 	P("\nstatic void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){\n");
-//        HPM_helper_start("nrn_init_",prefix);
 	  P("double* _p; Datum* _ppvar; Datum* _thread;\n");
 	  P("Node *_nd; double _v; int* _ni; int _iml, _cntml;\n");
 	  P("#if CACHEVEC\n");
@@ -689,7 +686,6 @@ P("#include \"md2redef.h\"\n");
 	P(" initmodel(_p, _ppvar, _thread, _nt);\n");
 	printlist(set_ion_variables(2));
 	P("}\n");
-  //      HPM_helper_stop("nrn_init_",prefix);
 	P("}\n");
 
 	/* standard modl EQUATION without solve computes current */
@@ -714,7 +710,6 @@ P("#include \"md2redef.h\"\n");
 
     if (brkpnt_exists) {
 	P("\nstatic void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
-//        HPM_helper_start("nrn_cur_",prefix);
 	  P("double* _p; Datum* _ppvar; Datum* _thread;\n");
 	  P("Node *_nd; int* _ni; double _rhs, _v; int _iml, _cntml;\n");
 	  P("#if CACHEVEC\n");
@@ -786,12 +781,10 @@ P("#include \"md2redef.h\"\n");
 	}
    }
 	P(" \n}\n");
-//        HPM_helper_stop("nrn_cur_",prefix);
 	P(" \n}\n");
 	/* for the classic breakpoint block, nrn_cur computed the conductance, _g,
 	   and now the jacobian calculation merely returns that */
 	P("\nstatic void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
-//          HPM_helper_start("nrn_jacob_",prefix);
 	  P("double* _p; Datum* _ppvar; Datum* _thread;\n");
 	  P("Node *_nd; int* _ni; int _iml, _cntml;\n");
 	  P("#if CACHEVEC\n");
@@ -837,14 +830,12 @@ P("#include \"md2redef.h\"\n");
 #endif
 	}
 	P(" \n}\n");
-//        HPM_helper_stop("nrn_jacob_",prefix);
 	P(" \n}\n");
     }
 
 	/* nrnstate list contains the EQUATION solve statement so this
 	   advances states by dt */
 	P("\nstatic void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
-        HPM_helper_start("nrn_state_",prefix);
 	if (nrnstate || currents->next == currents) {
 	  P("double* _p; Datum* _ppvar; Datum* _thread;\n");
 	  P("Node *_nd; double _v = 0.0; int* _ni; int _iml, _cntml;\n");
@@ -868,7 +859,6 @@ P("#include \"md2redef.h\"\n");
 	  printlist(set_ion_variables(1));
 	P("}}\n");
 	}
-        HPM_helper_stop("nrn_state_",prefix);
 	P("\n}\n");
 
 	P("\nstatic void terminal(){}\n");

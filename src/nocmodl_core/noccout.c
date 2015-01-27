@@ -4,7 +4,6 @@
 #include "modl.h"
 #include "parse1.h"
 #include "symbol.h"
-#include "hpm_profiling.h"
 
 #define CACHEVEC 1
 
@@ -587,7 +586,6 @@ void c_out_vectorize(const char* prefix)
 	P("/* VECTORIZED */\n");
 	P("#include <stdio.h>\n#include <stdlib.h>\n#include <math.h>\n#include \"corebluron/mech/cfile/scoplib.h\"\n");
 	P("#undef PI\n");
-    HPM_helper_include();
 	printlist(defs_list);
 	printlist(firstlist);
 	if (modelline) {
@@ -627,7 +625,6 @@ void c_out_vectorize(const char* prefix)
 
 	/* generation of initmodel interface */
 	P("\nstatic void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){\n");
-//        HPM_helper_start("nrn_init_",prefix);
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
 	  P("double _v; int* _ni; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
@@ -645,7 +642,6 @@ void c_out_vectorize(const char* prefix)
 	P(" initmodel(_threadargs_);\n");
 	printlist(set_ion_variables(2));
 	P("}\n");
-  //      HPM_helper_stop("nrn_init_",prefix);
 	P("}\n");
 
 	/* standard modl EQUATION without solve computes current */
@@ -670,7 +666,6 @@ void c_out_vectorize(const char* prefix)
 
     if (brkpnt_exists) {
 	P("\nstatic void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
-//        HPM_helper_start("nrn_cur_",prefix);
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
 	  P("int* _ni; double _rhs, _v; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
@@ -732,12 +727,10 @@ void c_out_vectorize(const char* prefix)
 	}
    }
 	P(" \n}\n");
-//        HPM_helper_stop("nrn_cur_",prefix);
 	P(" \n}\n");
 	/* for the classic breakpoint block, nrn_cur computed the conductance, _g,
 	   and now the jacobian calculation merely returns that */
 	P("\nstatic void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
-//          HPM_helper_start("nrn_jacob_",prefix);
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
 	  P("int* _ni; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
@@ -763,14 +756,12 @@ void c_out_vectorize(const char* prefix)
 #endif
 	}
 	P(" \n}\n");
-//        HPM_helper_stop("nrn_jacob_",prefix);
 	P(" \n}\n");
     }
 
 	/* nrnstate list contains the EQUATION solve statement so this
 	   advances states by dt */
 	P("\nstatic void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
-        HPM_helper_start("nrn_state_",prefix);
 	if (nrnstate || currents->next == currents) {
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
 	  P("double _v = 0.0; int* _ni; int _iml, _cntml;\n");
@@ -790,7 +781,6 @@ void c_out_vectorize(const char* prefix)
 	  printlist(set_ion_variables(1));
 	P("}}\n");
 	}
-        HPM_helper_stop("nrn_state_",prefix);
 	P("\n}\n");
 
 	P("\nstatic void terminal(){}\n");
