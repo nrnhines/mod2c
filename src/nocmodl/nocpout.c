@@ -137,6 +137,7 @@ static int decode_tolerance();
 /* NEURON block information */
 List *currents;
 List *useion;
+List* conductance_;
 static List *rangeparm;
 static List *rangedep;
 static List *rangestate;
@@ -1637,6 +1638,18 @@ void bablk(ba, type, q1, q2)
 	lappendstr(ba_list_, buf);
 }
 
+int ion_declared(Symbol* s) {
+	Item* q;
+	int used = 0;
+	ITERATE(q, useion) {
+		if (SYM(q) == s) {
+			used = 1;
+		}
+		q = q->next->next->next;
+	}
+	return used;	
+}
+
 void nrn_use(q1, q2, q3, q4)
 	Item *q1, *q2, *q3, *q4;
 {
@@ -1647,13 +1660,7 @@ void nrn_use(q1, q2, q3, q4)
 	
 	ion = SYM(q1);
 	/* is it already used */
-	used = 0;
-	ITERATE(q, useion) {
-		if (SYM(q) == SYM(q1)) {
-			used = 1;
-		}
-		q = q->next->next->next;
-	}
+	used = ion_declared(SYM(q1));
 	if (used) { /* READ gets promoted to WRITE */
 		diag("mergeing of neuron models not supported yet", (char *)0);
 	}else{ /* create all the ionic variables */
@@ -2705,5 +2712,26 @@ void threadsafe_seen(Item* q1, Item* q2) {
 			SYM(q)->assigned_to_ = 2;
 		}
 	}
+}
+
+void conductance_hint(int blocktype, Item* q1, Item* q2) {
+	Item* q;
+	if (blocktype != BREAKPOINT) {
+		diag("CONDUCTANCE can only appear in BREAKPOINT block", (char*)0);
+	}
+	if (!conductance_) {
+		conductance_ = newlist();
+	}
+	lappendsym(conductance_, SYM(q1->next));
+	if (q2 != q1->next) {
+		Symbol* s = SYM(q2);
+		if (!ion_declared(s)) {
+			diag(s->name, " not declared as USEION in NEURON block");
+		}
+		lappendsym(conductance_, s);
+	}else{
+		lappendsym(conductance_, SYM0);
+	}
+	deltokens(q1, q2);
 }
 

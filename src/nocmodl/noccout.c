@@ -17,6 +17,8 @@ List           *procfunc, *initfunc, *modelfunc, *termfunc, *initlist, *firstlis
 List		*nrnstate;
 extern List	*currents, *set_ion_variables(), *get_ion_variables();
 extern List	*begin_dion_stmt(), *end_dion_stmt();
+extern List* conductance_;
+static void conductance_cout();
 #endif
 
 extern Symbol  *indepsym;
@@ -29,6 +31,7 @@ extern int	brkpnt_exists;
 extern int	artificial_cell;
 extern int	net_receive_;
 extern int	debugging_;
+extern int	point_process;
 
 #if CVODE
 extern Symbol* cvode_nrn_cur_solve_;
@@ -731,6 +734,11 @@ P("#include \"md2redef.h\"\n");
 	  }
    if (currents->next != currents) {
 #endif
+     if (conductance_) {
+	P(" {\n");
+	  conductance_cout();
+	P(" }\n");
+     }else{
 	  P(" _g = _nrn_current(_p, _ppvar, _thread, _nt, _v + .001);\n");
 	  printlist(begin_dion_stmt());
 	if (state_discon_list_) {
@@ -740,6 +748,7 @@ P("#include \"md2redef.h\"\n");
 	}
 	  printlist(end_dion_stmt(".001"));
 	  P(" _g = (_g - _rhs)/.001;\n");
+     } /* end of not conductance */
 	  /* set the ion variable values */
 	  printlist(set_ion_variables(0));
 	  if (point_process) {
@@ -922,3 +931,65 @@ char* cray_pragma() {
 }
 
 #endif /*VECTORIZE*/
+
+static void conductance_cout() {
+  int i=0;
+  Item* q;
+  List* m;
+
+  m = newlist();
+  ITERATE(q, modelfunc) {
+    if (q->itemtype == SYMBOL) {
+      if (strcmp(SYM(q)->name, "v") == 0) {
+        lappendstr(m, "_v");
+      }else{
+        lappendsym(m, SYM(q));
+      }
+    }else if (q->itemtype == STRING) {
+      lappendstr(m, STR(q));
+    }else{
+      diag("modelfunc contains item which is not a SYMBOL or STRING", (char*)0);
+    }
+  }
+  printlist(m);
+
+  ITERATE(q, currents) {
+    if (i == 0) {
+      sprintf(buf, "  _rhs = %s", SYM(q)->name);
+    }else{
+      sprintf(buf, " + %s", SYM(q)->name);
+    }
+    P(buf);
+    i += 1;
+  }
+  if (i > 0) {
+    P(";\n");    
+  }
+
+  i = 0;
+  ITERATE(q, conductance_) {
+    if (i == 0) {
+      sprintf(buf, "  _g = %s", SYM(q)->name);
+    }else{
+      sprintf(buf, " + %s", SYM(q)->name);
+    }
+    P(buf);
+    i += 1;
+    q = q->next;
+  }
+  if (i > 0) {
+    P(";\n");
+  }
+
+  ITERATE(q, conductance_) {
+    if (SYM(q->next)) {
+      sprintf(buf, "  _ion_di%sdv += %s", SYM(q->next)->name, SYM(q)->name);
+      P(buf);
+      if (point_process) {
+        P("* 1.e2/(_nd_area)");
+      }
+      P(";\n");
+    }
+    q = q->next;
+  }
+}
