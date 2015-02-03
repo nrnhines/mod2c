@@ -10,15 +10,29 @@
 #include "corebluron/nrnconf.h"
 #include "corebluron/nrnoc/multicore.h"
 
+#include "corebluron/utils/randoms/nrnran123.h"
+
 #include "corebluron/nrnoc/md2redef.h"
 #if METHOD3
 extern int _method3;
 #endif
 
 #if !NRNGPU
+#if !defined(DISABLE_HOC_EXP)
 #undef exp
 #define exp hoc_Exp
+#endif
 extern double hoc_Exp(double);
+#endif
+ 
+#if !defined(LAYOUT)
+/* 1 means AoS, >1 means AoSoA, <= 0 means SOA */
+#define LAYOUT 1
+#endif
+#if LAYOUT >= 1
+#define _STRIDE LAYOUT
+#else
+#define _STRIDE _cntml + _iml
 #endif
  
 #define nrn_init _nrn_init__cc
@@ -30,10 +44,10 @@ extern double hoc_Exp(double);
 #define settables settables__cc 
 #define states states__cc 
  
-#define _threadargscomma_ _p, _ppvar, _thread, _nt,
-#define _threadargsprotocomma_ double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt,
-#define _threadargs_ _p, _ppvar, _thread, _nt
-#define _threadargsproto_ double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt
+#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt,
+#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt,
+#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt
+#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt
  	/*SUPPRESS 761*/
 	/*SUPPRESS 762*/
 	/*SUPPRESS 763*/
@@ -43,50 +57,50 @@ extern double hoc_Exp(double);
  
 #define t _nt->_t
 #define dt _nt->_dt
-#define gcapbar _p[0]
-#define captempfactor _p[1]
-#define gcatbar _p[2]
-#define cattempfactor _p[3]
-#define gkvcbar _p[4]
-#define gkcbar _p[5]
-#define gcap _p[6]
-#define gcat _p[7]
-#define gkvc _p[8]
-#define gkc _p[9]
-#define mpcal _p[10]
-#define hpcal _p[11]
-#define mtcal _p[12]
-#define htcal _p[13]
-#define okvc _p[14]
-#define okc _p[15]
-#define cai _p[16]
-#define eca _p[17]
-#define ica _p[18]
-#define ek _p[19]
-#define ik _p[20]
-#define mpcalinf _p[21]
-#define hpcalinf _p[22]
-#define mpcaltau _p[23]
-#define hpcaltau _p[24]
-#define mtcalinf _p[25]
-#define htcalinf _p[26]
-#define mtcaltau _p[27]
-#define htcaltau _p[28]
-#define Dmpcal _p[29]
-#define Dhpcal _p[30]
-#define Dmtcal _p[31]
-#define Dhtcal _p[32]
-#define Dokvc _p[33]
-#define Dokc _p[34]
-#define v _p[35]
-#define _g _p[36]
-#define _ion_eca		_nt->_data[_ppvar[0]]
-#define _ion_cai		_nt->_data[_ppvar[1]]
-#define _ion_ica	_nt->_data[_ppvar[2]]
-#define _ion_dicadv	_nt->_data[_ppvar[3]]
-#define _ion_ek		_nt->_data[_ppvar[4]]
-#define _ion_ik	_nt->_data[_ppvar[5]]
-#define _ion_dikdv	_nt->_data[_ppvar[6]]
+#define gcapbar _p[0*_STRIDE]
+#define captempfactor _p[1*_STRIDE]
+#define gcatbar _p[2*_STRIDE]
+#define cattempfactor _p[3*_STRIDE]
+#define gkvcbar _p[4*_STRIDE]
+#define gkcbar _p[5*_STRIDE]
+#define gcap _p[6*_STRIDE]
+#define gcat _p[7*_STRIDE]
+#define gkvc _p[8*_STRIDE]
+#define gkc _p[9*_STRIDE]
+#define mpcal _p[10*_STRIDE]
+#define hpcal _p[11*_STRIDE]
+#define mtcal _p[12*_STRIDE]
+#define htcal _p[13*_STRIDE]
+#define okvc _p[14*_STRIDE]
+#define okc _p[15*_STRIDE]
+#define cai _p[16*_STRIDE]
+#define eca _p[17*_STRIDE]
+#define ica _p[18*_STRIDE]
+#define ek _p[19*_STRIDE]
+#define ik _p[20*_STRIDE]
+#define mpcalinf _p[21*_STRIDE]
+#define hpcalinf _p[22*_STRIDE]
+#define mpcaltau _p[23*_STRIDE]
+#define hpcaltau _p[24*_STRIDE]
+#define mtcalinf _p[25*_STRIDE]
+#define htcalinf _p[26*_STRIDE]
+#define mtcaltau _p[27*_STRIDE]
+#define htcaltau _p[28*_STRIDE]
+#define Dmpcal _p[29*_STRIDE]
+#define Dhpcal _p[30*_STRIDE]
+#define Dmtcal _p[31*_STRIDE]
+#define Dhtcal _p[32*_STRIDE]
+#define Dokvc _p[33*_STRIDE]
+#define Dokc _p[34*_STRIDE]
+#define v _p[35*_STRIDE]
+#define _g _p[36*_STRIDE]
+#define _ion_eca		_nt->_data[_ppvar[0*_STRIDE]]
+#define _ion_cai		_nt->_data[_ppvar[1*_STRIDE]]
+#define _ion_ica	_nt->_data[_ppvar[2*_STRIDE]]
+#define _ion_dicadv	_nt->_data[_ppvar[3*_STRIDE]]
+#define _ion_ek		_nt->_data[_ppvar[4*_STRIDE]]
+#define _ion_ik	_nt->_data[_ppvar[5*_STRIDE]]
+#define _ion_dikdv	_nt->_data[_ppvar[6*_STRIDE]]
  
 #if MAC
 #if !defined(v)
@@ -251,6 +265,8 @@ static void  nrn_jacob(_NrnThread*, _Memb_list*, int);
  static int _k_type;
  
 static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {
+ 
+#if 0 /*BBCORE*/
  	/*initialize range parameters*/
  	gcapbar = 0;
  	captempfactor = 1;
@@ -258,8 +274,6 @@ static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {
  	cattempfactor = 1;
  	gkvcbar = 0;
  	gkcbar = 0;
- 
-#if 0 /*BBCORE*/
  prop_ion = need_memb(_ca_sym);
  nrn_promote(prop_ion, 1, 1);
  	_ppvar[0]._pval = &prop_ion->param[0]; /* eca */
@@ -282,7 +296,7 @@ static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {
 #define _ppsize 7
  extern Symbol* hoc_lookup(const char*);
 extern void _nrn_thread_reg(int, int, void(*f)(Datum*));
-extern void _nrn_thread_table_reg(int, void(*)(double*, Datum*, ThreadDatum*, _NrnThread*, int));
+extern void _nrn_thread_table_reg(int, void(*)(_threadargsproto_, int));
 extern void _cvode_abstol( Symbol**, double*, int);
 
  void _new_calcium_channels_reg() {
@@ -290,6 +304,7 @@ extern void _cvode_abstol( Symbol**, double*, int);
   _initlists();
  _mechtype = nrn_get_mechtype(_mechanism[1]);
  if (_mechtype == -1) return;
+ _nrn_layout_reg(_mechtype, LAYOUT);
  _ca_type = nrn_get_mechtype("ca_ion"); _k_type = nrn_get_mechtype("k_ion"); 
 #if 0 /*BBCORE*/
  	ion_reg("ca", -10000.);
@@ -300,6 +315,13 @@ extern void _cvode_abstol( Symbol**, double*, int);
 #endif /*BBCORE*/
  	register_mech(_mechanism, nrn_alloc,nrn_cur, nrn_jacob, nrn_state, nrn_init, hoc_nrnpointerindex, 1);
   hoc_register_prop_size(_mechtype, _psize, _ppsize);
+  hoc_register_dparam_semantics(_mechtype, 0, "ca_ion");
+  hoc_register_dparam_semantics(_mechtype, 1, "ca_ion");
+  hoc_register_dparam_semantics(_mechtype, 2, "ca_ion");
+  hoc_register_dparam_semantics(_mechtype, 3, "ca_ion");
+  hoc_register_dparam_semantics(_mechtype, 4, "k_ion");
+  hoc_register_dparam_semantics(_mechtype, 5, "k_ion");
+  hoc_register_dparam_semantics(_mechtype, 6, "k_ion");
  }
  static double FARADAY = 96.4853;
  static double R = 8.31342;
@@ -317,7 +339,7 @@ static int _ode_matsol1(_threadargsproto_);
  static int states(_threadargsproto_);
  
 /*CVODE*/
- static int _ode_spec1 (double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt) {int _reset = 0; {
+ static int _ode_spec1 (_threadargsproto_) {int _reset = 0; {
    double _linf , _ltau ;
  settables ( _threadargscomma_ v ) ;
    Dmpcal = ( ( mpcalinf - mpcal ) / mpcaltau ) ;
@@ -333,7 +355,7 @@ static int _ode_matsol1(_threadargsproto_);
    }
  return _reset;
 }
- static int _ode_matsol1 (double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt) {
+ static int _ode_matsol1 (_threadargsproto_) {
  double _linf , _ltau ;
  settables ( _threadargscomma_ v ) ;
  Dmpcal = Dmpcal  / (1. - dt*( ( ( ( ( - 1.0 ) ) ) / mpcaltau ) )) ;
@@ -349,7 +371,7 @@ static int _ode_matsol1(_threadargsproto_);
  return 0;
 }
  /*END CVODE*/
- static int states (double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt) { {
+ static int states (_threadargsproto_) { {
    double _linf , _ltau ;
  settables ( _threadargscomma_ v ) ;
     mpcal = mpcal + (1. - exp(dt*(( ( ( ( - 1.0 ) ) ) / mpcaltau ))))*(- ( ( ( ( mpcalinf ) ) / mpcaltau ) ) / ( ( ( ( ( - 1.0) ) ) / mpcaltau ) ) - mpcal) ;
@@ -396,7 +418,7 @@ static void _hoc_settables(void) {
   _thread = _extcall_thread;
   _nt = nrn_threads;
  _r = 1.;
- settables ( _p, _ppvar, _thread, _nt, *getarg(1) ;
+ settables ( _threadargs_, *getarg(1) ;
  hoc_retpushx(_r);
 }
  
@@ -417,7 +439,7 @@ static void _hoc_okvcinf(void) {
    if (_extcall_prop) {_p = _extcall_prop->param; _ppvar = _extcall_prop->dparam;}else{ _p = (double*)0; _ppvar = (Datum*)0; }
   _thread = _extcall_thread;
   _nt = nrn_threads;
- _r =  okvcinf ( _p, _ppvar, _thread, _nt, *getarg(1) ;
+ _r =  okvcinf ( _threadargs_, *getarg(1) ;
  hoc_retpushx(_r);
 }
  
@@ -438,7 +460,7 @@ static void _hoc_okvctau(void) {
    if (_extcall_prop) {_p = _extcall_prop->param; _ppvar = _extcall_prop->dparam;}else{ _p = (double*)0; _ppvar = (Datum*)0; }
   _thread = _extcall_thread;
   _nt = nrn_threads;
- _r =  okvctau ( _p, _ppvar, _thread, _nt, *getarg(1) ;
+ _r =  okvctau ( _threadargs_, *getarg(1) ;
  hoc_retpushx(_r);
 }
  
@@ -461,7 +483,7 @@ static void _hoc_okcinf(void) {
    if (_extcall_prop) {_p = _extcall_prop->param; _ppvar = _extcall_prop->dparam;}else{ _p = (double*)0; _ppvar = (Datum*)0; }
   _thread = _extcall_thread;
   _nt = nrn_threads;
- _r =  okcinf ( _p, _ppvar, _thread, _nt, *getarg(1) ;
+ _r =  okcinf ( _threadargs_, *getarg(1) ;
  hoc_retpushx(_r);
 }
  
@@ -484,7 +506,7 @@ static void _hoc_okctau(void) {
    if (_extcall_prop) {_p = _extcall_prop->param; _ppvar = _extcall_prop->dparam;}else{ _p = (double*)0; _ppvar = (Datum*)0; }
   _thread = _extcall_thread;
   _nt = nrn_threads;
- _r =  okctau ( _p, _ppvar, _thread, _nt, *getarg(1) ;
+ _r =  okctau ( _threadargs_, *getarg(1) ;
  hoc_retpushx(_r);
 }
  
@@ -492,7 +514,7 @@ static void _hoc_okctau(void) {
  static void _update_ion_pointer(Datum* _ppvar) {
  }
 
-static void initmodel(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt) {
+static void initmodel(_threadargsproto_) {
   int _i; double _save;{
   htcal = htcal0;
   hpcal = hpcal0;
@@ -516,23 +538,30 @@ static void initmodel(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThrea
 static void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 double _v; int* _ni; int _iml, _cntml;
-#if CACHEVEC
     _ni = _ml->_nodeindices;
-#endif
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+#if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+ _p = _ml->_data; _ppvar = _ml->_pdata;
+for (_iml = 0; _iml < _cntml; ++_iml) {
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
     _v = VEC_V(_ni[_iml]);
  v = _v;
   eca = _ion_eca;
   cai = _ion_cai;
   ek = _ion_ek;
- initmodel(_p, _ppvar, _thread, _nt);
+ initmodel(_threadargs_);
   }
 }
 
-static double _nrn_current(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double _v){double _current=0.;v=_v;{ {
+static double _nrn_current(_threadargsproto_, double _v){double _current=0.;v=_v;{ {
    gcap = gcapbar * mpcal * mpcal * hpcal ;
    gcat = gcatbar * mtcal * mtcal * htcal ;
    gkvc = gkvcbar * ( pow( okvc , 4.0 ) ) ;
@@ -549,23 +578,31 @@ static double _nrn_current(double* _p, Datum* _ppvar, ThreadDatum* _thread, _Nrn
 static void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 int* _ni; double _rhs, _v; int _iml, _cntml;
-#if CACHEVEC
     _ni = _ml->_nodeindices;
-#endif
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+#if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+ _p = _ml->_data; _ppvar = _ml->_pdata;
+#pragma ivdep
+for (_iml = 0; _iml < _cntml; ++_iml) {
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
     _v = VEC_V(_ni[_iml]);
   eca = _ion_eca;
   cai = _ion_cai;
   ek = _ion_ek;
- _g = _nrn_current(_p, _ppvar, _thread, _nt, _v + .001);
+ _g = _nrn_current(_threadargs_, _v + .001);
  	{ double _dik;
  double _dica;
   _dica = ica;
   _dik = ik;
- _rhs = _nrn_current(_p, _ppvar, _thread, _nt, _v);
+ _rhs = _nrn_current(_threadargs_, _v);
   _ion_dicadv += (_dica - ica)/.001 ;
   _ion_dikdv += (_dik - ik)/.001 ;
  	}
@@ -581,13 +618,20 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 static void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 int* _ni; int _iml, _cntml;
-#if CACHEVEC
     _ni = _ml->_nodeindices;
-#endif
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+#if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
- _p = _ml->_data + _iml*_psize;
+ _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+ _p = _ml->_data; _ppvar = _ml->_pdata;
+for (_iml = 0; _iml < _cntml; ++_iml) {
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
 	VEC_D(_ni[_iml]) += _g;
  
 }
@@ -597,20 +641,28 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 static void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 double _v = 0.0; int* _ni; int _iml, _cntml;
-#if CACHEVEC
     _ni = _ml->_nodeindices;
-#endif
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+#if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+ _p = _ml->_data; _ppvar = _ml->_pdata;
+#pragma ivdep
+for (_iml = 0; _iml < _cntml; ++_iml) {
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
     _v = VEC_V(_ni[_iml]);
  v=_v;
 {
   eca = _ion_eca;
   cai = _ion_cai;
   ek = _ion_ek;
- {   states(_p, _ppvar, _thread, _nt);
+ {   states(_threadargs_);
   }  }}
 
 }
@@ -620,6 +672,8 @@ static void terminal(){}
 static void _initlists(){
  double _x; double* _p = &_x;
  int _i; static int _first = 1;
+ int _cntml=0;
+ int _iml=0;
   if (!_first) return;
  _slist1[0] = &(mpcal) - _p;  _dlist1[0] = &(Dmpcal) - _p;
  _slist1[1] = &(hpcal) - _p;  _dlist1[1] = &(Dhpcal) - _p;

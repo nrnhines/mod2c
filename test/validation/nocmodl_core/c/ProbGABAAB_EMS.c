@@ -10,15 +10,29 @@
 #include "corebluron/nrnconf.h"
 #include "corebluron/nrnoc/multicore.h"
 
+#include "corebluron/utils/randoms/nrnran123.h"
+
 #include "corebluron/nrnoc/md2redef.h"
 #if METHOD3
 extern int _method3;
 #endif
 
 #if !NRNGPU
+#if !defined(DISABLE_HOC_EXP)
 #undef exp
 #define exp hoc_Exp
+#endif
 extern double hoc_Exp(double);
+#endif
+ 
+#if !defined(LAYOUT)
+/* 1 means AoS, >1 means AoSoA, <= 0 means SOA */
+#define LAYOUT 1
+#endif
+#if LAYOUT >= 1
+#define _STRIDE LAYOUT
+#else
+#define _STRIDE _cntml + _iml
 #endif
  
 #define nrn_init _nrn_init__ProbGABAAB_EMS
@@ -30,10 +44,10 @@ extern double hoc_Exp(double);
 #define setRNG setRNG__ProbGABAAB_EMS 
 #define state state__ProbGABAAB_EMS 
  
-#define _threadargscomma_ _p, _ppvar, _thread, _nt,
-#define _threadargsprotocomma_ double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt,
-#define _threadargs_ _p, _ppvar, _thread, _nt
-#define _threadargsproto_ double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt
+#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt,
+#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt,
+#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt
+#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt
  	/*SUPPRESS 761*/
 	/*SUPPRESS 762*/
 	/*SUPPRESS 763*/
@@ -43,47 +57,47 @@ extern double hoc_Exp(double);
  
 #define t _nt->_t
 #define dt _nt->_dt
-#define tau_r_GABAA _p[0]
-#define tau_d_GABAA _p[1]
-#define tau_r_GABAB _p[2]
-#define tau_d_GABAB _p[3]
-#define Use _p[4]
-#define Dep _p[5]
-#define Fac _p[6]
-#define e_GABAA _p[7]
-#define e_GABAB _p[8]
-#define u0 _p[9]
-#define synapseID _p[10]
-#define verboseLevel _p[11]
-#define GABAB_ratio _p[12]
-#define i _p[13]
-#define i_GABAA _p[14]
-#define i_GABAB _p[15]
-#define g_GABAA _p[16]
-#define g_GABAB _p[17]
-#define A_GABAA_step _p[18]
-#define B_GABAA_step _p[19]
-#define A_GABAB_step _p[20]
-#define B_GABAB_step _p[21]
-#define g _p[22]
-#define Rstate _p[23]
-#define tsyn_fac _p[24]
-#define u _p[25]
-#define A_GABAA _p[26]
-#define B_GABAA _p[27]
-#define A_GABAB _p[28]
-#define B_GABAB _p[29]
-#define factor_GABAA _p[30]
-#define factor_GABAB _p[31]
-#define DA_GABAA _p[32]
-#define DB_GABAA _p[33]
-#define DA_GABAB _p[34]
-#define DB_GABAB _p[35]
-#define v _p[36]
-#define _g _p[37]
-#define _tsav _p[38]
-#define _nd_area  _nt->_data[_ppvar[0]]
-#define _p_rng	_nt->_vdata[_ppvar[2]]
+#define tau_r_GABAA _p[0*_STRIDE]
+#define tau_d_GABAA _p[1*_STRIDE]
+#define tau_r_GABAB _p[2*_STRIDE]
+#define tau_d_GABAB _p[3*_STRIDE]
+#define Use _p[4*_STRIDE]
+#define Dep _p[5*_STRIDE]
+#define Fac _p[6*_STRIDE]
+#define e_GABAA _p[7*_STRIDE]
+#define e_GABAB _p[8*_STRIDE]
+#define u0 _p[9*_STRIDE]
+#define synapseID _p[10*_STRIDE]
+#define verboseLevel _p[11*_STRIDE]
+#define GABAB_ratio _p[12*_STRIDE]
+#define i _p[13*_STRIDE]
+#define i_GABAA _p[14*_STRIDE]
+#define i_GABAB _p[15*_STRIDE]
+#define g_GABAA _p[16*_STRIDE]
+#define g_GABAB _p[17*_STRIDE]
+#define A_GABAA_step _p[18*_STRIDE]
+#define B_GABAA_step _p[19*_STRIDE]
+#define A_GABAB_step _p[20*_STRIDE]
+#define B_GABAB_step _p[21*_STRIDE]
+#define g _p[22*_STRIDE]
+#define Rstate _p[23*_STRIDE]
+#define tsyn_fac _p[24*_STRIDE]
+#define u _p[25*_STRIDE]
+#define A_GABAA _p[26*_STRIDE]
+#define B_GABAA _p[27*_STRIDE]
+#define A_GABAB _p[28*_STRIDE]
+#define B_GABAB _p[29*_STRIDE]
+#define factor_GABAA _p[30*_STRIDE]
+#define factor_GABAB _p[31*_STRIDE]
+#define DA_GABAA _p[32*_STRIDE]
+#define DB_GABAA _p[33*_STRIDE]
+#define DA_GABAB _p[34*_STRIDE]
+#define DB_GABAB _p[35*_STRIDE]
+#define v _p[36*_STRIDE]
+#define _g _p[37*_STRIDE]
+#define _tsav _p[38*_STRIDE]
+#define _nd_area  _nt->_data[_ppvar[0*_STRIDE]]
+#define _p_rng	_nt->_vdata[_ppvar[2*_STRIDE]]
  
 #if MAC
 #if !defined(v)
@@ -260,6 +274,8 @@ static int _ode_count(int);
  0};
  
 static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {
+ 
+#if 0 /*BBCORE*/
  	/*initialize range parameters*/
  	tau_r_GABAA = 0.2;
  	tau_d_GABAA = 8;
@@ -275,8 +291,6 @@ static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {
  	verboseLevel = 0;
  	GABAB_ratio = 0;
  
-#if 0 /*BBCORE*/
- 
 #endif /* BBCORE */
  
 }
@@ -290,7 +304,7 @@ static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {
  extern void hoc_reg_bbcore_read(int, void(*)(double *, int*, int*, int*, _threadargsproto_));
  extern Symbol* hoc_lookup(const char*);
 extern void _nrn_thread_reg(int, int, void(*f)(Datum*));
-extern void _nrn_thread_table_reg(int, void(*)(double*, Datum*, ThreadDatum*, _NrnThread*, int));
+extern void _nrn_thread_table_reg(int, void(*)(_threadargsproto_, int));
 extern void _cvode_abstol( Symbol**, double*, int);
 
  void _ProbGABAAB_EMS_reg() {
@@ -298,6 +312,7 @@ extern void _cvode_abstol( Symbol**, double*, int);
   _initlists();
  _mechtype = nrn_get_mechtype(_mechanism[1]);
  if (_mechtype == -1) return;
+ _nrn_layout_reg(_mechtype, LAYOUT);
  
 #if 0 /*BBCORE*/
  
@@ -309,6 +324,9 @@ extern void _cvode_abstol( Symbol**, double*, int);
 	 1);
    hoc_reg_bbcore_read(_mechtype, bbcore_read);
   hoc_register_prop_size(_mechtype, _psize, _ppsize);
+  hoc_register_dparam_semantics(_mechtype, 0, "area");
+  hoc_register_dparam_semantics(_mechtype, 1, "pntproc");
+  hoc_register_dparam_semantics(_mechtype, 2, "bbcorepointer");
  pnt_receive[_mechtype] = _net_receive;
  pnt_receive_init[_mechtype] = _net_init;
  pnt_receive_size[_mechtype] = 5;
@@ -342,7 +360,7 @@ static double _hoc_state(void* _vptr) {
   _thread = _extcall_thread;
   _nt = (_NrnThread*)((Point_process*)_vptr)->_vnt;
  _r = 1.;
- state ( _p, _ppvar, _thread, _nt );
+ state ( _threadargs_ );
  return(_r);
 }
  
@@ -350,7 +368,21 @@ static double _hoc_state(void* _vptr) {
  
 static void _net_receive (_pnt, _args, _lflag) Point_process* _pnt; double* _args; double _lflag; 
 {  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt;
-   _thread = (ThreadDatum*)0; _nt = (_NrnThread*)_pnt->_vnt;   _p = _pnt->_data; _ppvar = _pnt->_pdata;
+   _Memb_list* _ml; int _cntml; int _iml;
+ 
+   _thread = (ThreadDatum*)0; _nt = nrn_threads + _pnt->_tid;
+   _ml = _nt->_ml_list[_pnt->_type];
+   _cntml = _ml->_nodecount;
+   _iml = _pnt->_i_instance;
+#if LAYOUT == 1 /*AoS*/
+   _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+   _p = _ml->_data; _ppvar = _ml->_pdata;
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
   assert(_tsav <= t); _tsav = t; {
    double _lresult ;
  _args[1] = _args[0] ;
@@ -403,10 +435,23 @@ static void _net_receive (_pnt, _args, _lflag) Point_process* _pnt; double* _arg
    } }
  
 static void _net_init(Point_process* _pnt, double* _args, double _lflag) {
-       double* _p = _pnt->_data;
-    Datum* _ppvar = _pnt->_pdata;
-    ThreadDatum* _thread = (ThreadDatum*)0;
-    _NrnThread* _nt = (_NrnThread*)_pnt->_vnt;
+   
+   double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt;
+   _Memb_list* _ml; int _cntml; int _iml;
+ 
+   _thread = (ThreadDatum*)0; _nt = nrn_threads + _pnt->_tid;
+   _ml = _nt->_ml_list[_pnt->_type];
+   _cntml = _ml->_nodecount;
+   _iml = _pnt->_i_instance;
+#if LAYOUT == 1 /*AoS*/
+   _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+   _p = _ml->_data; _ppvar = _ml->_pdata;
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
  _args[4] = t ;
    }
  
@@ -437,7 +482,7 @@ static double _hoc_setRNG(void* _vptr) {
   _thread = _extcall_thread;
   _nt = (_NrnThread*)((Point_process*)_vptr)->_vnt;
  _r = 1.;
- setRNG ( _p, _ppvar, _thread, _nt );
+ setRNG ( _threadargs_ );
  return(_r);
 }
  
@@ -474,7 +519,7 @@ static double _hoc_urand(void* _vptr) {
   _ppvar = ((Point_process*)_vptr)->_prop->dparam;
   _thread = _extcall_thread;
   _nt = (_NrnThread*)((Point_process*)_vptr)->_vnt;
- _r =  urand ( _p, _ppvar, _thread, _nt );
+ _r =  urand ( _threadargs_ );
  return(_r);
 }
  
@@ -518,7 +563,7 @@ static double _hoc_toggleVerbose(void* _vptr) {
   _ppvar = ((Point_process*)_vptr)->_prop->dparam;
   _thread = _extcall_thread;
   _nt = (_NrnThread*)((Point_process*)_vptr)->_vnt;
- _r =  toggleVerbose ( _p, _ppvar, _thread, _nt );
+ _r =  toggleVerbose ( _threadargs_ );
  return(_r);
 }
  
@@ -526,7 +571,7 @@ static double _hoc_toggleVerbose(void* _vptr) {
  
 static int _ode_count(int _type){ hoc_execerror("ProbGABAAB_EMS", "cannot be used with CVODE"); return 0;}
 
-static void initmodel(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt) {
+static void initmodel(_threadargsproto_) {
   int _i; double _save;{
   A_GABAB = A_GABAB0;
   A_GABAA = A_GABAA0;
@@ -565,21 +610,28 @@ static void initmodel(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThrea
 static void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 double _v; int* _ni; int _iml, _cntml;
-#if CACHEVEC
     _ni = _ml->_nodeindices;
-#endif
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+#if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+ _p = _ml->_data; _ppvar = _ml->_pdata;
+for (_iml = 0; _iml < _cntml; ++_iml) {
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
  _tsav = -1e20;
     _v = VEC_V(_ni[_iml]);
  v = _v;
- initmodel(_p, _ppvar, _thread, _nt);
+ initmodel(_threadargs_);
 }
 }
 
-static double _nrn_current(double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double _v){double _current=0.;v=_v;{ {
+static double _nrn_current(_threadargsproto_, double _v){double _current=0.;v=_v;{ {
    g_GABAA = gmax * ( B_GABAA - A_GABAA ) ;
    g_GABAB = gmax * ( B_GABAB - A_GABAB ) ;
    g = g_GABAA + g_GABAB ;
@@ -595,21 +647,32 @@ static double _nrn_current(double* _p, Datum* _ppvar, ThreadDatum* _thread, _Nrn
 static void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 int* _ni; double _rhs, _v; int _iml, _cntml;
-#if CACHEVEC
     _ni = _ml->_nodeindices;
-#endif
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+#if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+ _p = _ml->_data; _ppvar = _ml->_pdata;
+#pragma ivdep
+for (_iml = 0; _iml < _cntml; ++_iml) {
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
     _v = VEC_V(_ni[_iml]);
- _g = _nrn_current(_p, _ppvar, _thread, _nt, _v + .001);
- 	{ _rhs = _nrn_current(_p, _ppvar, _thread, _nt, _v);
+ _g = _nrn_current(_threadargs_, _v + .001);
+ 	{ _rhs = _nrn_current(_threadargs_, _v);
  	}
  _g = (_g - _rhs)/.001;
  _g *=  1.e2/(_nd_area);
  _rhs *= 1.e2/(_nd_area);
-	VEC_RHS(_ni[_iml]) -= _rhs;
+	_nt->_shadow_rhs[_iml] = _rhs;
+ }
+ for (_iml = 0; _iml < _cntml; ++_iml) {
+   VEC_RHS(_ni[_iml]) -= _nt->_shadow_rhs[_iml];
  
 }
  
@@ -618,13 +681,20 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 static void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 int* _ni; int _iml, _cntml;
-#if CACHEVEC
     _ni = _ml->_nodeindices;
-#endif
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+#if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
- _p = _ml->_data + _iml*_psize;
+ _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+ _p = _ml->_data; _ppvar = _ml->_pdata;
+for (_iml = 0; _iml < _cntml; ++_iml) {
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
 	VEC_D(_ni[_iml]) += _g;
  
 }
@@ -634,17 +704,25 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 static void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 double _v = 0.0; int* _ni; int _iml, _cntml;
-#if CACHEVEC
     _ni = _ml->_nodeindices;
-#endif
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+#if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
+#endif
+#if LAYOUT == 0 /*SoA*/
+ _p = _ml->_data; _ppvar = _ml->_pdata;
+#pragma ivdep
+for (_iml = 0; _iml < _cntml; ++_iml) {
+#endif
+#if LAYOUT > 1 /*AoSoA*/
+#error AoSoA not implemented.
+#endif
     _v = VEC_V(_ni[_iml]);
  v=_v;
 {
- {  { state(_p, _ppvar, _thread, _nt); }
+ {  { state(_threadargs_); }
   }}}
 
 }
@@ -654,6 +732,8 @@ static void terminal(){}
 static void _initlists(){
  double _x; double* _p = &_x;
  int _i; static int _first = 1;
+ int _cntml=0;
+ int _iml=0;
   if (!_first) return;
 _first = 0;
 }
