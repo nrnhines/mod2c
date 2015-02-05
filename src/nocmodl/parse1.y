@@ -407,6 +407,7 @@ locallist: LOCAL
 	   locallist1
 		{ replacstr($1, "double");
 		  Insertstr(lastok->next, ";\n");
+		  possible_local_current(blocktype, toplocal1_);
 		}
 	| LOCAL error {myerr("Illegal LOCAL declaration");}
 	;

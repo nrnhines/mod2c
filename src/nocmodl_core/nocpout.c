@@ -138,6 +138,7 @@ static int decode_tolerance();
 List *currents;
 List *useion;
 List* conductance_;
+List* breakpoint_local_current_;
 static List *rangeparm;
 static List *rangedep;
 static List *rangestate;
@@ -1914,7 +1915,7 @@ List *set_ion_variables(block)
 		ITERATE(q1, LST(q)) {
 			if (SYM(q1)->nrntype & NRNCUROUT) {
 				if ( block == 0) {
-Sprintf(buf, " _ion_%s += %s", SYM(q1)->name, SYM(q1)->name);
+Sprintf(buf, " _ion_%s += %s", SYM(q1)->name, breakpoint_current(SYM(q1))->name);
 					Lappendstr(l, buf);
 					if (point_process) {
 						Sprintf(buf, "* 1.e2/ (_nd_area);\n");
@@ -2788,3 +2789,31 @@ void conductance_hint(int blocktype, Item* q1, Item* q2) {
 	deltokens(q1, q2);
 }
 
+void possible_local_current(int blocktype, List* symlist) {
+	Item* q; Item* q2;
+	if (blocktype != BREAKPOINT) { return; }
+	ITERATE(q, currents) {
+		ITERATE(q2, symlist) {
+			char* n = SYM(q2)->name + 2; /* start after the _l */
+			if (strcmp(SYM(q)->name, n) == 0) {
+				if (!breakpoint_local_current_) {
+					breakpoint_local_current_ = newlist();
+				}
+				lappendsym(breakpoint_local_current_, SYM(q));
+				lappendsym(breakpoint_local_current_, SYM(q2));
+			}
+		}
+	}
+}
+
+Symbol* breakpoint_current(Symbol* s) {
+	if (breakpoint_local_current_) {
+		Item* q;
+		ITERATE(q, breakpoint_local_current_) {
+			if (SYM(q) == s) {
+				return SYM(q->next);
+			}
+		}
+	}
+	return s;
+}

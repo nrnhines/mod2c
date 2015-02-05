@@ -18,6 +18,7 @@ List		*nrnstate;
 extern List	*currents, *set_ion_variables(), *get_ion_variables();
 extern List	*begin_dion_stmt(), *end_dion_stmt();
 extern List* conductance_;
+extern List* breakpoint_local_current_;
 static void conductance_cout();
 #endif
 
@@ -692,6 +693,7 @@ P("#include \"md2redef.h\"\n");
 	P("}\n");
 
 	/* standard modl EQUATION without solve computes current */
+     if (!conductance_) {
 	P("\nstatic double _nrn_current(double* _p, Datum* _ppvar, Datum* _thread, _NrnThread* _nt, double _v){double _current=0.;v=_v;");
 #if CVODE
 	if (cvode_nrn_current_solve_) {
@@ -707,6 +709,7 @@ P("#include \"md2redef.h\"\n");
 		P(buf);
 	}
 	P("\n} return _current;\n}\n");
+     }
 
 	/* For the classic BREAKPOINT block, the neuron current also has to compute the dcurrent/dv as well
 	   as make sure all currents accumulated properly (currents list) */
@@ -737,6 +740,7 @@ P("#include \"md2redef.h\"\n");
      if (conductance_) {
 	P(" {\n");
 	  conductance_cout();
+	  printlist(set_ion_variables(0));
 	P(" }\n");
      }else{
 	  P(" _g = _nrn_current(_p, _ppvar, _thread, _nt, _v + .001);\n");
@@ -748,9 +752,9 @@ P("#include \"md2redef.h\"\n");
 	}
 	  printlist(end_dion_stmt(".001"));
 	  P(" _g = (_g - _rhs)/.001;\n");
-     } /* end of not conductance */
 	  /* set the ion variable values */
 	  printlist(set_ion_variables(0));
+     } /* end of not conductance */
 	  if (point_process) {
 		P(" _g *=  1.e2/(_nd_area);\n");
 		P(" _rhs *= 1.e2/(_nd_area);\n");
@@ -937,6 +941,7 @@ static void conductance_cout() {
   Item* q;
   List* m;
 
+  /* replace v with _v */
   m = newlist();
   ITERATE(q, modelfunc) {
     if (q->itemtype == SYMBOL) {
@@ -951,13 +956,32 @@ static void conductance_cout() {
       diag("modelfunc contains item which is not a SYMBOL or STRING", (char*)0);
     }
   }
+  /* eliminate first { */
+  ITERATE(q, m) {
+    if (q->itemtype == SYMBOL) {
+      if (strcmp(SYM(q)->name, "{") == 0) {
+        delete(q);
+        break;
+      }
+    }
+  }
+  /* eliminate last } */
+  for (q = m->prev; q != m; q = q->prev) {
+    if (q->itemtype == SYMBOL) {
+      if (strcmp(SYM(q)->name, "}") == 0) {
+        delete(q);
+        break;
+      }
+    }
+  }
+
   printlist(m);
 
   ITERATE(q, currents) {
     if (i == 0) {
-      sprintf(buf, "  _rhs = %s", SYM(q)->name);
+      sprintf(buf, "  _rhs = %s", breakpoint_current(SYM(q))->name);
     }else{
-      sprintf(buf, " + %s", SYM(q)->name);
+      sprintf(buf, " + %s", breakpoint_current(SYM(q))->name);
     }
     P(buf);
     i += 1;
