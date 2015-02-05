@@ -21,10 +21,10 @@ add_flex_bison_dependency(lex parse1)
 add_definitions(-DNMODL=1 -DBBCORE=1 -DNOCMODL=1 -DCVODE=1 -DVECTORIZE=1)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable(nocmodl_core
+add_executable(mod2c_core
     ${NOCMODL_CORE_SOURCES}
     ${BISON_diffeq_OUTPUTS} ${BISON_parse1_OUTPUTS}
     ${FLEX_lex_OUTPUTS})
 
-install(TARGETS nocmodl_core DESTINATION bin)
+install(TARGETS mod2c_core DESTINATION bin)
 

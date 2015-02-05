@@ -27,8 +27,8 @@ wslist(REMOVE_ITEM CMAKE_CXX_FLAGS "-Werror")
 find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
 
-add_subdirectory(src/nocmodl)
-add_subdirectory(src/nocmodl_core)
+add_subdirectory(src/mod2c)
+add_subdirectory(src/mod2c_core)
 add_subdirectory(test/validation)
 
 install(FILES share/nrnunits.lib DESTINATION share)
