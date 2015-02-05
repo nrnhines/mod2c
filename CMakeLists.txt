@@ -11,7 +11,10 @@ set(MOD2C_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake ${CMAKE_SOURCE_DIR}/CMake/common)
 include(GitExternal)
+
+set(MOD2C_DESCRIPTION "MOD2C converter")
 include(Common)
+include(FindPackages)
 
 # treat white-space separated string as a list
 macro(wslist listcmd listvar)
