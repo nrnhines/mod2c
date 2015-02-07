@@ -11,7 +11,10 @@ set(MOD2C_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake ${CMAKE_SOURCE_DIR}/CMake/common)
 include(GitExternal)
+
+set(MOD2C_DESCRIPTION "MOD2C converter")
 include(Common)
+include(FindPackages)
 
 # treat white-space separated string as a list
 macro(wslist listcmd listvar)
@@ -27,8 +30,8 @@ wslist(REMOVE_ITEM CMAKE_CXX_FLAGS "-Werror")
 find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
 
-add_subdirectory(src/nocmodl)
-add_subdirectory(src/nocmodl_core)
+add_subdirectory(src/mod2c)
+add_subdirectory(src/mod2c_core)
 add_subdirectory(test/validation)
 
 install(FILES share/nrnunits.lib DESTINATION share)
