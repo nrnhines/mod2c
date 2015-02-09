@@ -33,6 +33,5 @@ add_executable(mod2c
     ${BISON_diffeq_OUTPUTS} ${BISON_parse1_OUTPUTS}
     ${FLEX_lex_OUTPUTS})
 
-#let HPCNeuron install its version of nocmodl.
-#install(TARGETS mod2c DESTINATION bin)
+install(TARGETS mod2c DESTINATION bin)
 
