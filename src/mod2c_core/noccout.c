@@ -585,6 +585,7 @@ void c_out_vectorize(const char* prefix)
 {
 	Item *q;
 	extern int point_process;
+	(void)prefix; /* not used */
 	
 	/* things which must go first and most declarations */
 	P("/* VECTORIZED */\n");
@@ -673,7 +674,7 @@ void c_out_vectorize(const char* prefix)
     if (brkpnt_exists) {
 	P("\nstatic void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("int* _ni; double _rhs, _v; int _iml, _cntml;\n");
+	  P("int* _ni; double _rhs, _g, _v; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
@@ -715,32 +716,41 @@ void c_out_vectorize(const char* prefix)
 	if (electrode_current) {
 #if CACHEVEC == 0
 		P("	NODERHS(_nd) += _rhs;\n");
+		P("	NODED(_nd) -= _g;\n");
 #else
 		P("	VEC_RHS(_ni[_iml]) += _rhs;\n");
+		P("	VEC_D(_ni[_iml]) -= _g;\n");
 #endif
 		P("#if EXTRACELLULAR\n");
 		P(" if (_nd->_extnode) {\n");
 		P("   *_nd->_extnode->_rhs[0] += _rhs;\n");
+		P("   *_nd->_extnode->_d[0] += _g;\n");
 		P(" }\n");
 		P("#endif\n");
 	}else{
 #if CACHEVEC == 0
 		P("	NODERHS(_nd) -= _rhs;\n");
+		P("	NODED(_nd) += _g;\n");
 #else
 		if (point_process) {
 			P("	_nt->_shadow_rhs[_iml] = _rhs;\n\
+    _nt->_shadow_d[_iml] = _g;\n\
  }\n\
  for (_iml = 0; _iml < _cntml; ++_iml) {\n\
    VEC_RHS(_ni[_iml]) -= _nt->_shadow_rhs[_iml];\n\
+   VEC_D(_ni[_iml]) += _nt->_shadow_d[_iml];\n\
 ");
 		}else{
 			P("	VEC_RHS(_ni[_iml]) -= _rhs;\n");
+			P("	VEC_D(_ni[_iml]) += _g;\n");
 		}
 #endif
 	}
    }
 	P(" \n}\n");
 	P(" \n}\n");
+
+  if (0) { /* instead, jacobian handled in nrn_cur */
 	/* for the classic breakpoint block, nrn_cur computed the conductance, _g,
 	   and now the jacobian calculation merely returns that */
 	P("\nstatic void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
@@ -771,6 +781,7 @@ void c_out_vectorize(const char* prefix)
 	P(" \n}\n");
 	P(" \n}\n");
     }
+  } /*instead, jacobian handled in nrn_cur */
 
 	/* nrnstate list contains the EQUATION solve statement so this
 	   advances states by dt */
@@ -850,12 +861,12 @@ void vectorize_do_substitute() {
 }
 
 char* cray_pragma() {
-	static char buf[] = "\
+	static char buf1[] = "\
 \n#if _CRAY\
 \n#pragma _CRI ivdep\
 \n#endif\
 \n";
-	return buf;
+	return buf1;
 }
 
 #endif /*VECTORIZE*/

@@ -232,7 +232,11 @@ void parout() {
 
 	defs_list = newlist();	/* relates hoc names to c-variables */
 	if (brkpnt_exists) {
+	    if (vectorize) {
+		brkpnt_str_ = "nrn_cur, NULL, nrn_state";
+	    }else{
 		brkpnt_str_ = "nrn_cur, nrn_jacob, nrn_state";
+	    }
 	}else{
 		brkpnt_str_ = "0, 0, 0";
 #if 1 || defined(__MINGW32__)
@@ -317,7 +321,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 #define nrn_jacob _nrn_jacob_%s\n\
 #define nrn_state _nrn_state_%s\n\
 #define _net_receive _net_receive_%s\
-", suffix, suffix, suffix, suffix, suffix, suffix, suffix);
+", suffix, suffix, suffix, suffix, suffix, suffix);
 	Lappendstr(defs_list, buf);
 	SYMLISTITER {
 		Symbol* s = SYM(q);
@@ -708,7 +712,10 @@ diag("No statics allowed for thread safe models:", s->name);
 	Lappendstr(defs_list, "static void nrn_alloc(double*, Datum*, int);\nstatic void  nrn_init(_NrnThread*, _Memb_list*, int);\nstatic void nrn_state(_NrnThread*, _Memb_list*, int);\n\
 ");
 	if (brkpnt_exists) {
-		Lappendstr(defs_list, "static void nrn_cur(_NrnThread*, _Memb_list*, int);\nstatic void  nrn_jacob(_NrnThread*, _Memb_list*, int);\n");
+		Lappendstr(defs_list, "static void nrn_cur(_NrnThread*, _Memb_list*, int);\n");
+	    if (!vectorize) {
+		Lappendstr(defs_list, "static void  nrn_jacob(_NrnThread*, _Memb_list*, int);\n");
+	    }
 	}
 	/* count the number of pointers needed */
 	ppvar_cnt = ioncount + diamdec + pointercount + areadec;
@@ -1888,7 +1895,7 @@ static void declare_p() {
 		var_count(s);
 	}
 #endif
-	if (brkpnt_exists) {
+	if (brkpnt_exists && !vectorize) {
 		s = ifnew_install("_g");
 		var_count(s);
 	}
