@@ -502,7 +502,7 @@ Sprintf(buf, "\"%s%s\", _hoc_%s,\n", s->name, rsuffix, s->name);
 		int j;
 		s = SYM(q);
 		if ((s->subtype & FUNCT)) {
-			Sprintf(buf, "double %s(", s->name);
+			Sprintf(buf, "inline double %s(", s->name);
 			Lappendstr(defs_list, buf);
 			if (vectorize && !s->no_threadargs) {
 				if (s->varnum) {
