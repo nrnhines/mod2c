@@ -1891,14 +1891,19 @@ static void declare_p() {
 		}
 	}
 #if VECTORIZE
-	if (0 && vectorize) {
-		s = ifnew_install("v");
+	if (vectorize) {
+		s = ifnew_install("_v_unused");
 		var_count(s);
 	}
 #endif
-	if (brkpnt_exists && !vectorize) {
+	if (brkpnt_exists) {
+	    if (vectorize) {
+		s = ifnew_install("_g_unused");
+		var_count(s);
+	    }else{
 		s = ifnew_install("_g");
 		var_count(s);
+	    }
 	}
 	if (debugging_ && net_receive_) {
 		s = ifnew_install("_tsav");
