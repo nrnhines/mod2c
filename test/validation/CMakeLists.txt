@@ -4,6 +4,12 @@ set(TEST_LABEL validation)
 
 add_test_class(validation)
 
+set(MOD2CFILTER "perl ${CMAKE_CURRENT_SOURCE_DIR}/filter_mod2c_output.pl")
+configure_file("test_mod2c.in" ${CMAKE_CURRENT_BINARY_DIR}/test_mod2c @ONLY)
+
+set(MOD2CFILTER "perl ${CMAKE_CURRENT_SOURCE_DIR}/filter_mod2c_output.pl -DNRNBBCORE=1")
+configure_file("test_mod2c.in" ${CMAKE_CURRENT_BINARY_DIR}/test_mod2c_core @ONLY)
+
 set(TEST_ENVIRONMENT "MODLUNIT=${CMAKE_SOURCE_DIR}/share/nrnunits.lib")
 
 foreach(mod2c "mod2c" "mod2c_core")
@@ -15,7 +21,7 @@ foreach(mod2c "mod2c" "mod2c_core")
 	string(REGEX REPLACE "\\.mod$" "" mod "${modfile}")
 
 	set(TEST_ARGS ${CMAKE_BINARY_DIR}/bin/${mod2c} ${test_data}/mod/${mod}.mod ${test_data}/c/${mod}.c)
-	add_test_script("${mod2c}-${mod}" test_mod2c "/bin/bash")
+	add_test_script("${mod2c}-${mod}" "${CMAKE_CURRENT_BINARY_DIR}/test_${mod2c}" "/bin/bash")
     endforeach()
 endforeach()
 
