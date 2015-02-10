@@ -631,7 +631,7 @@ void c_out_vectorize(const char* prefix)
 	/* generation of initmodel interface */
 	P("\nstatic void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){\n");
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("double _v; int* _ni; int _iml, _cntml;\n");
+	  P("double _v, v; int* _ni; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
@@ -674,7 +674,7 @@ void c_out_vectorize(const char* prefix)
     if (brkpnt_exists) {
 	P("\nstatic void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("int* _ni; double _rhs, _g, _v; int _iml, _cntml;\n");
+	  P("int* _ni; double _rhs, _g, _v, v; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
@@ -788,7 +788,7 @@ void c_out_vectorize(const char* prefix)
 	P("\nstatic void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
 	if (nrnstate || currents->next == currents) {
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("double _v = 0.0; int* _ni; int _iml, _cntml;\n");
+	  P("double v, _v = 0.0; int* _ni; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");

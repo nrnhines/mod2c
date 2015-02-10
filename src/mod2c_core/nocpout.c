@@ -336,10 +336,10 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 
 	if (vectorize) {
 		Lappendstr(defs_list, "\n\
-#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt,\n\
-#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt,\n\
-#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt\n\
-#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt\n\
+#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt, v,\n\
+#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,\n\
+#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt, v\n\
+#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v\n\
 ");
 	}else{
 		Lappendstr(defs_list, "\n\
@@ -1805,6 +1805,7 @@ diag(s->name, " cannot be a RANGE or GLOBAL variable for this mechanism");
     if (vectorize) {
 	s = ifnew_install("v");
 	s->nrntype = NRNNOTP; /* this is a lie, it goes in at end specially */
+	/* no it is not a lie. Use an optimization where voltage passed via arguments */
     }else
 #endif
     {
@@ -1890,7 +1891,7 @@ static void declare_p() {
 		}
 	}
 #if VECTORIZE
-	if (vectorize) {
+	if (0 && vectorize) {
 		s = ifnew_install("v");
 		var_count(s);
 	}
@@ -2610,7 +2611,7 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 	}
 	net_receive_ = 1;
 	deltokens(qp1, qp2);
-	insertstr(qstmt, "(_pnt, _args, _lflag) Point_process* _pnt; double* _args; double _lflag;");
+	insertstr(qstmt, "(Point_process* _pnt, double* _args, double _lflag)");
 	i = 0;
 	ITERATE(q1, qarg) if (q1->next != qarg) { /* skip last "flag" arg */
 		s = SYM(q1);
@@ -2625,7 +2626,7 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 	net_send_delivered_ = qstmt;
 	q = insertstr(qstmt, "\n{");
 	vectorize_substitute(q, "\n\
-{  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt;\n\
+{  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt; double v;\n\
    _Memb_list* _ml; int _cntml; int _iml;\n\
 ");
 	if (watch_seen_) {
