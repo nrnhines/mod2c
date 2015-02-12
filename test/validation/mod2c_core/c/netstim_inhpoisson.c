@@ -47,10 +47,10 @@ extern double hoc_Exp(double);
 #define setRNGs setRNGs__InhPoissonStim 
 #define update_time update_time__InhPoissonStim 
  
-#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt,
-#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt,
-#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt
-#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt
+#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt, v,
+#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,
+#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt, v
+#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v
  	/*SUPPRESS 761*/
 	/*SUPPRESS 762*/
 	/*SUPPRESS 763*/
@@ -66,7 +66,7 @@ extern double hoc_Exp(double);
 #define curRate _p[3*_STRIDE]
 #define start _p[4*_STRIDE]
 #define event _p[5*_STRIDE]
-#define v _p[6*_STRIDE]
+#define _v_unused _p[6*_STRIDE]
 #define _tsav _p[7*_STRIDE]
 #define _nd_area  _nt->_data[_ppvar[0*_STRIDE]]
 #define _p_uniform_rng	_nt->_vdata[_ppvar[2*_STRIDE]]
@@ -146,8 +146,8 @@ extern Memb_func* memb_func;
 #endif /*BBCORE*/
 #define erand erand_InhPoissonStim
 #define urand urand_InhPoissonStim
- extern double erand( _threadargsproto_ );
- extern double urand( _threadargsproto_ );
+ inline double erand( _threadargsproto_ );
+ inline double urand( _threadargsproto_ );
  /* declare global and static user variables */
 #define interval_min interval_min_InhPoissonStim
  double interval_min = 1;
@@ -629,8 +629,8 @@ static double _hoc_update_time(void* _vptr) {
  
 #endif /*BBCORE*/
  
-static void _net_receive (_pnt, _args, _lflag) Point_process* _pnt; double* _args; double _lflag; 
-{  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt;
+static void _net_receive (Point_process* _pnt, double* _args, double _lflag) 
+{  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt; double v;
    _Memb_list* _ml; int _cntml; int _iml;
  
    _thread = (ThreadDatum*)0; _nt = nrn_threads + _pnt->_tid;
@@ -728,7 +728,7 @@ static void initmodel(_threadargsproto_) {
 
 static void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
-double _v; int* _ni; int _iml, _cntml;
+double _v, v; int* _ni; int _iml, _cntml;
     _ni = _ml->_nodeindices;
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
@@ -754,7 +754,7 @@ static double _nrn_current(_threadargsproto_, double _v){double _current=0.;v=_v
 
 static void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
-double _v = 0.0; int* _ni; int _iml, _cntml;
+double v, _v = 0.0; int* _ni; int _iml, _cntml;
     _ni = _ml->_nodeindices;
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;

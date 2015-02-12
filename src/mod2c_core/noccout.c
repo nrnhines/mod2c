@@ -17,6 +17,9 @@ List           *procfunc, *initfunc, *modelfunc, *termfunc, *initlist, *firstlis
 List		*nrnstate;
 extern List	*currents, *set_ion_variables(), *get_ion_variables();
 extern List	*begin_dion_stmt(), *end_dion_stmt();
+extern List* conductance_;
+extern List* breakpoint_local_current_;
+static void conductance_cout();
 #endif
 
 extern Symbol  *indepsym;
@@ -29,6 +32,7 @@ extern int	brkpnt_exists;
 extern int	artificial_cell;
 extern int	net_receive_;
 extern int	debugging_;
+extern int	point_process;
 
 #if CVODE
 extern Symbol* cvode_nrn_cur_solve_;
@@ -581,6 +585,7 @@ void c_out_vectorize(const char* prefix)
 {
 	Item *q;
 	extern int point_process;
+	(void)prefix; /* not used */
 	
 	/* things which must go first and most declarations */
 	P("/* VECTORIZED */\n");
@@ -626,7 +631,7 @@ void c_out_vectorize(const char* prefix)
 	/* generation of initmodel interface */
 	P("\nstatic void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){\n");
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("double _v; int* _ni; int _iml, _cntml;\n");
+	  P("double _v, v; int* _ni; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
@@ -645,6 +650,7 @@ void c_out_vectorize(const char* prefix)
 	P("}\n");
 
 	/* standard modl EQUATION without solve computes current */
+    if (!conductance_) {
 	P("\nstatic double _nrn_current(_threadargsproto_, double _v){double _current=0.;v=_v;");
 #if CVODE
 	if (cvode_nrn_current_solve_) {
@@ -660,6 +666,7 @@ void c_out_vectorize(const char* prefix)
 		P(buf);
 	}
 	P("\n} return _current;\n}\n");
+     }
 
 	/* For the classic BREAKPOINT block, the neuron current also has to compute the dcurrent/dv as well
 	   as make sure all currents accumulated properly (currents list) */
@@ -667,7 +674,7 @@ void c_out_vectorize(const char* prefix)
     if (brkpnt_exists) {
 	P("\nstatic void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("int* _ni; double _rhs, _v; int _iml, _cntml;\n");
+	  P("int* _ni; double _rhs, _g, _v, v; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
@@ -684,6 +691,12 @@ void c_out_vectorize(const char* prefix)
 	  }
    if (currents->next != currents) {
 #endif
+     if (conductance_) {
+	 P(" {\n");
+	 conductance_cout();
+     printlist(set_ion_variables(0));
+	 P(" }\n");
+     }else{
 	  P(" _g = _nrn_current(_threadargs_, _v + .001);\n");
 	  printlist(begin_dion_stmt());
 	if (state_discon_list_) {
@@ -695,6 +708,7 @@ void c_out_vectorize(const char* prefix)
 	  P(" _g = (_g - _rhs)/.001;\n");
 	  /* set the ion variable values */
 	  printlist(set_ion_variables(0));
+     } /* end of not conductance */
 	  if (point_process) {
 		P(" _g *=  1.e2/(_nd_area);\n");
 		P(" _rhs *= 1.e2/(_nd_area);\n");
@@ -702,32 +716,41 @@ void c_out_vectorize(const char* prefix)
 	if (electrode_current) {
 #if CACHEVEC == 0
 		P("	NODERHS(_nd) += _rhs;\n");
+		P("	NODED(_nd) -= _g;\n");
 #else
 		P("	VEC_RHS(_ni[_iml]) += _rhs;\n");
+		P("	VEC_D(_ni[_iml]) -= _g;\n");
 #endif
 		P("#if EXTRACELLULAR\n");
 		P(" if (_nd->_extnode) {\n");
 		P("   *_nd->_extnode->_rhs[0] += _rhs;\n");
+		P("   *_nd->_extnode->_d[0] += _g;\n");
 		P(" }\n");
 		P("#endif\n");
 	}else{
 #if CACHEVEC == 0
 		P("	NODERHS(_nd) -= _rhs;\n");
+		P("	NODED(_nd) += _g;\n");
 #else
 		if (point_process) {
 			P("	_nt->_shadow_rhs[_iml] = _rhs;\n\
+    _nt->_shadow_d[_iml] = _g;\n\
  }\n\
  for (_iml = 0; _iml < _cntml; ++_iml) {\n\
    VEC_RHS(_ni[_iml]) -= _nt->_shadow_rhs[_iml];\n\
+   VEC_D(_ni[_iml]) += _nt->_shadow_d[_iml];\n\
 ");
 		}else{
 			P("	VEC_RHS(_ni[_iml]) -= _rhs;\n");
+			P("	VEC_D(_ni[_iml]) += _g;\n");
 		}
 #endif
 	}
    }
 	P(" \n}\n");
 	P(" \n}\n");
+
+  if (0) { /* instead, jacobian handled in nrn_cur */
 	/* for the classic breakpoint block, nrn_cur computed the conductance, _g,
 	   and now the jacobian calculation merely returns that */
 	P("\nstatic void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
@@ -758,13 +781,14 @@ void c_out_vectorize(const char* prefix)
 	P(" \n}\n");
 	P(" \n}\n");
     }
+  } /*instead, jacobian handled in nrn_cur */
 
 	/* nrnstate list contains the EQUATION solve statement so this
 	   advances states by dt */
 	P("\nstatic void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
 	if (nrnstate || currents->next == currents) {
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("double _v = 0.0; int* _ni; int _iml, _cntml;\n");
+	  P("double v, _v = 0.0; int* _ni; int _iml, _cntml;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
@@ -837,12 +861,94 @@ void vectorize_do_substitute() {
 }
 
 char* cray_pragma() {
-	static char buf[] = "\
+	static char buf1[] = "\
 \n#if _CRAY\
 \n#pragma _CRI ivdep\
 \n#endif\
 \n";
-	return buf;
+	return buf1;
 }
 
 #endif /*VECTORIZE*/
+
+static void conductance_cout() {
+  int i=0;
+  Item* q;
+  List* m;
+
+  /* replace v with _v */
+  m = newlist();
+  ITERATE(q, modelfunc) {
+    if (q->itemtype == SYMBOL) {
+      if (strcmp(SYM(q)->name, "v") == 0) {
+        lappendstr(m, "_v");
+      }else{
+        lappendsym(m, SYM(q));
+      }
+    }else if (q->itemtype == STRING) {
+      lappendstr(m, STR(q));
+    }else{
+      diag("modelfunc contains item which is not a SYMBOL or STRING", (char*)0);
+    }
+  }
+  /* eliminate first { */
+  ITERATE(q, m) {
+    if (q->itemtype == SYMBOL) {
+      if (strcmp(SYM(q)->name, "{") == 0) {
+        delete(q);
+        break;
+      }
+    }
+  }
+  /* eliminate last } */
+  for (q = m->prev; q != m; q = q->prev) {
+    if (q->itemtype == SYMBOL) {
+      if (strcmp(SYM(q)->name, "}") == 0) {
+        delete(q);
+        break;
+      }
+    }
+  }
+
+  printlist(m);
+
+  ITERATE(q, currents) {
+    if (i == 0) {
+      sprintf(buf, "  _rhs = %s", breakpoint_current(SYM(q))->name);
+    }else{
+      sprintf(buf, " + %s", breakpoint_current(SYM(q))->name);
+    }
+    P(buf);
+    i += 1;
+  }
+  if (i > 0) {
+    P(";\n");
+  }
+
+  i = 0;
+  ITERATE(q, conductance_) {
+    if (i == 0) {
+      sprintf(buf, "  _g = %s", SYM(q)->name);
+    }else{
+      sprintf(buf, " + %s", SYM(q)->name);
+    }
+    P(buf);
+    i += 1;
+    q = q->next;
+  }
+  if (i > 0) {
+    P(";\n");
+  }
+
+  ITERATE(q, conductance_) {
+    if (SYM(q->next)) {
+      sprintf(buf, "  _ion_di%sdv += %s", SYM(q->next)->name, SYM(q)->name);
+      P(buf);
+      if (point_process) {
+        P("* 1.e2/(_nd_area)");
+      }
+      P(";\n");
+    }
+    q = q->next;
+  }
+}

@@ -137,6 +137,8 @@ static int decode_tolerance();
 /* NEURON block information */
 List *currents;
 List *useion;
+List* conductance_;
+List* breakpoint_local_current_;
 static List *rangeparm;
 static List *rangedep;
 static List *rangestate;
@@ -230,7 +232,11 @@ void parout() {
 
 	defs_list = newlist();	/* relates hoc names to c-variables */
 	if (brkpnt_exists) {
+	    if (vectorize) {
+		brkpnt_str_ = "nrn_cur, NULL, nrn_state";
+	    }else{
 		brkpnt_str_ = "nrn_cur, nrn_jacob, nrn_state";
+	    }
 	}else{
 		brkpnt_str_ = "0, 0, 0";
 #if 1 || defined(__MINGW32__)
@@ -315,7 +321,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 #define nrn_jacob _nrn_jacob_%s\n\
 #define nrn_state _nrn_state_%s\n\
 #define _net_receive _net_receive_%s\
-", suffix, suffix, suffix, suffix, suffix, suffix, suffix);
+", suffix, suffix, suffix, suffix, suffix, suffix);
 	Lappendstr(defs_list, buf);
 	SYMLISTITER {
 		Symbol* s = SYM(q);
@@ -330,10 +336,10 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 
 	if (vectorize) {
 		Lappendstr(defs_list, "\n\
-#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt,\n\
-#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt,\n\
-#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt\n\
-#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt\n\
+#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt, v,\n\
+#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,\n\
+#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt, v\n\
+#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v\n\
 ");
 	}else{
 		Lappendstr(defs_list, "\n\
@@ -496,7 +502,7 @@ Sprintf(buf, "\"%s%s\", _hoc_%s,\n", s->name, rsuffix, s->name);
 		int j;
 		s = SYM(q);
 		if ((s->subtype & FUNCT)) {
-			Sprintf(buf, "extern double %s(", s->name);
+			Sprintf(buf, "inline double %s(", s->name);
 			Lappendstr(defs_list, buf);
 			if (vectorize && !s->no_threadargs) {
 				if (s->varnum) {
@@ -706,7 +712,10 @@ diag("No statics allowed for thread safe models:", s->name);
 	Lappendstr(defs_list, "static void nrn_alloc(double*, Datum*, int);\nstatic void  nrn_init(_NrnThread*, _Memb_list*, int);\nstatic void nrn_state(_NrnThread*, _Memb_list*, int);\n\
 ");
 	if (brkpnt_exists) {
-		Lappendstr(defs_list, "static void nrn_cur(_NrnThread*, _Memb_list*, int);\nstatic void  nrn_jacob(_NrnThread*, _Memb_list*, int);\n");
+		Lappendstr(defs_list, "static void nrn_cur(_NrnThread*, _Memb_list*, int);\n");
+	    if (!vectorize) {
+		Lappendstr(defs_list, "static void  nrn_jacob(_NrnThread*, _Memb_list*, int);\n");
+	    }
 	}
 	/* count the number of pointers needed */
 	ppvar_cnt = ioncount + diamdec + pointercount + areadec;
@@ -1665,6 +1674,18 @@ void bablk(ba, type, q1, q2)
 	lappendstr(ba_list_, buf);
 }
 
+int ion_declared(Symbol* s) {
+	Item* q;
+	int used = 0;
+	ITERATE(q, useion) {
+		if (SYM(q) == s) {
+			used = 1;
+		}
+		q = q->next->next->next;
+	}
+	return used;
+}
+
 void nrn_use(q1, q2, q3, q4)
 	Item *q1, *q2, *q3, *q4;
 {
@@ -1675,13 +1696,7 @@ void nrn_use(q1, q2, q3, q4)
 	
 	ion = SYM(q1);
 	/* is it already used */
-	used = 0;
-	ITERATE(q, useion) {
-		if (SYM(q) == SYM(q1)) {
-			used = 1;
-		}
-		q = q->next->next->next;
-	}
+	used = ion_declared(SYM(q1));
 	if (used) { /* READ gets promoted to WRITE */
 		diag("mergeing of neuron models not supported yet", (char *)0);
 	}else{ /* create all the ionic variables */
@@ -1790,6 +1805,7 @@ diag(s->name, " cannot be a RANGE or GLOBAL variable for this mechanism");
     if (vectorize) {
 	s = ifnew_install("v");
 	s->nrntype = NRNNOTP; /* this is a lie, it goes in at end specially */
+	/* no it is not a lie. Use an optimization where voltage passed via arguments */
     }else
 #endif
     {
@@ -1876,13 +1892,18 @@ static void declare_p() {
 	}
 #if VECTORIZE
 	if (vectorize) {
-		s = ifnew_install("v");
+		s = ifnew_install("_v_unused");
 		var_count(s);
 	}
 #endif
 	if (brkpnt_exists) {
+	    if (vectorize) {
+		s = ifnew_install("_g_unused");
+		var_count(s);
+	    }else{
 		s = ifnew_install("_g");
 		var_count(s);
+	    }
 	}
 	if (debugging_ && net_receive_) {
 		s = ifnew_install("_tsav");
@@ -1907,7 +1928,7 @@ List *set_ion_variables(block)
 		ITERATE(q1, LST(q)) {
 			if (SYM(q1)->nrntype & NRNCUROUT) {
 				if ( block == 0) {
-Sprintf(buf, " _ion_%s += %s", SYM(q1)->name, SYM(q1)->name);
+Sprintf(buf, " _ion_%s += %s", SYM(q1)->name, breakpoint_current(SYM(q1))->name);
 					Lappendstr(l, buf);
 					if (point_process) {
 						Sprintf(buf, "* 1.e2/ (_nd_area);\n");
@@ -2595,7 +2616,7 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 	}
 	net_receive_ = 1;
 	deltokens(qp1, qp2);
-	insertstr(qstmt, "(_pnt, _args, _lflag) Point_process* _pnt; double* _args; double _lflag;");
+	insertstr(qstmt, "(Point_process* _pnt, double* _args, double _lflag)");
 	i = 0;
 	ITERATE(q1, qarg) if (q1->next != qarg) { /* skip last "flag" arg */
 		s = SYM(q1);
@@ -2610,7 +2631,7 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 	net_send_delivered_ = qstmt;
 	q = insertstr(qstmt, "\n{");
 	vectorize_substitute(q, "\n\
-{  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt;\n\
+{  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt; double v;\n\
    _Memb_list* _ml; int _cntml; int _iml;\n\
 ");
 	if (watch_seen_) {
@@ -2760,3 +2781,52 @@ void threadsafe_seen(Item* q1, Item* q2) {
 	}
 }
 
+void conductance_hint(int blocktype, Item* q1, Item* q2) {
+	Item* q;
+	if (blocktype != BREAKPOINT) {
+		diag("CONDUCTANCE can only appear in BREAKPOINT block", (char*)0);
+	}
+	if (!conductance_) {
+		conductance_ = newlist();
+	}
+	lappendsym(conductance_, SYM(q1->next));
+	if (q2 != q1->next) {
+		Symbol* s = SYM(q2);
+		if (!ion_declared(s)) {
+			diag(s->name, " not declared as USEION in NEURON block");
+		}
+		lappendsym(conductance_, s);
+	}else{
+		lappendsym(conductance_, SYM0);
+	}
+	deltokens(q1, q2);
+}
+
+void possible_local_current(int blocktype, List* symlist) {
+	Item* q; Item* q2;
+	if (blocktype != BREAKPOINT) { return; }
+	ITERATE(q, currents) {
+		ITERATE(q2, symlist) {
+			char* n = SYM(q2)->name + 2; /* start after the _l */
+			if (strcmp(SYM(q)->name, n) == 0) {
+				if (!breakpoint_local_current_) {
+					breakpoint_local_current_ = newlist();
+				}
+				lappendsym(breakpoint_local_current_, SYM(q));
+				lappendsym(breakpoint_local_current_, SYM(q2));
+			}
+		}
+	}
+}
+
+Symbol* breakpoint_current(Symbol* s) {
+	if (breakpoint_local_current_) {
+		Item* q;
+		ITERATE(q, breakpoint_local_current_) {
+			if (SYM(q) == s) {
+				return SYM(q->next);
+			}
+		}
+	}
+	return s;
+}
