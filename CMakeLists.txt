@@ -39,3 +39,8 @@ install(FILES share/nrnunits.lib DESTINATION share)
 set(MOD2C_CONFIG_VERSION_IN "mod2cConfigVersion.cmake.in")
 include(CommonCPack)
 
+#Documentation
+set(GIT_DOCUMENTATION_REPO BBPDocumentation)
+set(COMMON_ORGANIZATION_NAME BBP)
+set(COMMON_PROJECT_DOMAIN ch.epfl.bluebrain)
+include(DoxygenRule)

@@ -1,0 +1,28 @@
+/*
+
+        Ecole Polytechnique Federale de Lausanne
+        Brain Mind Institute,
+        Blue Brain Project
+        (c) 2015. All rights reserved.
+
+        Responsible authors: Sam Yates
+
+*/
+
+// doxygen documentation ______________________________________________________
+
+/*!
+
+\mainpage
+
+Mod2C is a converter of .mod files into .c files. For more documentation, please visit:
+https://bbp.epfl.ch/documentation/code/#mod2c
+
+The document has the following sections:
+
+- @subpage Release_Notes
+- @subpage User_Guide
+- @subpage Developers_Guide
+
+*/
+
