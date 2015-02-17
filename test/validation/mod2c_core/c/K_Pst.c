@@ -3,16 +3,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "corebluron/mech/cfile/scoplib.h"
+#include "coreneuron/mech/cfile/scoplib.h"
 #undef PI
  
-#include "corebluron/nrnoc/md1redef.h"
-#include "corebluron/nrnconf.h"
-#include "corebluron/nrnoc/multicore.h"
+#include "coreneuron/nrnoc/md1redef.h"
+#include "coreneuron/nrnconf.h"
+#include "coreneuron/nrnoc/multicore.h"
 
-#include "corebluron/utils/randoms/nrnran123.h"
+#include "coreneuron/utils/randoms/nrnran123.h"
 
-#include "corebluron/nrnoc/md2redef.h"
+#include "coreneuron/nrnoc/md2redef.h"
 #if METHOD3
 extern int _method3;
 #endif

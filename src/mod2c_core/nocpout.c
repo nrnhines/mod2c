@@ -274,11 +274,11 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 	}
 
 	Lappendstr(defs_list, "\
-\n#include \"corebluron/nrnoc/md1redef.h\"\
-\n#include \"corebluron/nrnconf.h\"\
-\n#include \"corebluron/nrnoc/multicore.h\"\n\
-\n#include \"corebluron/utils/randoms/nrnran123.h\"\n\
-\n#include \"corebluron/nrnoc/md2redef.h\"\
+\n#include \"coreneuron/nrnoc/md1redef.h\"\
+\n#include \"coreneuron/nrnconf.h\"\
+\n#include \"coreneuron/nrnoc/multicore.h\"\n\
+\n#include \"coreneuron/utils/randoms/nrnran123.h\"\n\
+\n#include \"coreneuron/nrnoc/md2redef.h\"\
 \n#if METHOD3\nextern int _method3;\n#endif\n\
 \n#if !NRNGPU\
 \n#if !defined(DISABLE_HOC_EXP)\

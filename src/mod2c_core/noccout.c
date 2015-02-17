@@ -113,7 +113,7 @@ void c_out(const char* prefix)
 	P("#include \"common.h\"\n#include \"softbus.h\"\n");
 	P("#include \"sbtypes.h\"\n#include \"Solver.h\"\n");
 #else
-	P("#include <stdio.h>\n#include <stdlib.h>\n#include <math.h>\n#include \"corebluron/mech/cfile/scoplib.h\"\n");
+	P("#include <stdio.h>\n#include <stdlib.h>\n#include <math.h>\n#include \"coreneuron/mech/cfile/scoplib.h\"\n");
 	P("#undef PI\n");
 #endif
 	printlist(defs_list);
@@ -589,7 +589,7 @@ void c_out_vectorize(const char* prefix)
 	
 	/* things which must go first and most declarations */
 	P("/* VECTORIZED */\n");
-	P("#include <stdio.h>\n#include <stdlib.h>\n#include <math.h>\n#include \"corebluron/mech/cfile/scoplib.h\"\n");
+	P("#include <stdio.h>\n#include <stdlib.h>\n#include <math.h>\n#include \"coreneuron/mech/cfile/scoplib.h\"\n");
 	P("#undef PI\n");
 	printlist(defs_list);
 	printlist(firstlist);

@@ -45,7 +45,7 @@
            In order to build a code manually, follow these steps:
 
          <code>
-         git clone ssh://bbpcode.epfl.ch/sim/corebluron <br>
+         git clone ssh://bbpcode.epfl.ch/sim/coreneuron <br>
          cd mod2c <br>
          mkdir build <br>
          cd build <br>
