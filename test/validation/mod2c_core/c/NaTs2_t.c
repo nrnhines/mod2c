@@ -75,9 +75,9 @@ extern double hoc_Exp(double);
 #define Dh _p[15*_STRIDE]
 #define _v_unused _p[16*_STRIDE]
 #define _g_unused _p[17*_STRIDE]
-#define _ion_ena		_nt->_data[_ppvar[0*_STRIDE]]
-#define _ion_ina	_nt->_data[_ppvar[1*_STRIDE]]
-#define _ion_dinadv	_nt->_data[_ppvar[2*_STRIDE]]
+#define _ion_ena		_nt_data[_ppvar[0*_STRIDE]]
+#define _ion_ina	_nt_data[_ppvar[1*_STRIDE]]
+#define _ion_dinadv	_nt_data[_ppvar[2*_STRIDE]]
  
 #if MAC
 #if !defined(v)
@@ -296,6 +296,8 @@ double _v, v; int* _ni; int _iml, _cntml;
     _ni = _ml->_nodeindices;
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+double * _nt_data = _nt->_data;
+double * _vec_v = _nt->_actual_v;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
@@ -307,7 +309,8 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
 #endif
-    _v = VEC_V(_ni[_iml]);
+    int _nd_idx = _ni[_iml];
+    _v = _vec_v[_nd_idx];
  v = _v;
   ena = _ion_ena;
  initmodel(_threadargs_);
@@ -329,6 +332,10 @@ int* _ni; double _rhs, _g, _v, v; int _iml, _cntml;
     _ni = _ml->_nodeindices;
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+double * _vec_rhs = _nt->_actual_rhs;
+double * _vec_d = _nt->_actual_d;
+double * _nt_data = _nt->_data;
+double * _vec_v = _nt->_actual_v;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
@@ -341,7 +348,8 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
 #endif
-    _v = VEC_V(_ni[_iml]);
+    int _nd_idx = _ni[_iml];
+    _v = _vec_v[_nd_idx];
   ena = _ion_ena;
  _g = _nrn_current(_threadargs_, _v + .001);
  	{ double _dina;
@@ -351,8 +359,8 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
  	}
  _g = (_g - _rhs)/.001;
   _ion_ina += ina ;
-	VEC_RHS(_ni[_iml]) -= _rhs;
-	VEC_D(_ni[_iml]) += _g;
+	_vec_rhs[_nd_idx] -= _rhs;
+	_vec_d[_nd_idx] += _g;
  
 }
  
@@ -364,6 +372,8 @@ double v, _v = 0.0; int* _ni; int _iml, _cntml;
     _ni = _ml->_nodeindices;
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+double * _nt_data = _nt->_data;
+double * _vec_v = _nt->_actual_v;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
@@ -376,7 +386,8 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
 #endif
-    _v = VEC_V(_ni[_iml]);
+    int _nd_idx = _ni[_iml];
+    _v = _vec_v[_nd_idx];
  v=_v;
 {
   ena = _ion_ena;

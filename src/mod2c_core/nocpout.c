@@ -2018,6 +2018,7 @@ Fprintf(stderr, "WARNING: WRITE %s with it a STATE may not be translated correct
 	return l;
 }
 
+/* note: _nt_data is only defined in nrn_init, nrn_cur and nrn_state where ions are used in the current mod files */
 static int iondef(p_pointercount) int *p_pointercount; {
 	int ioncount, it, need_style;
 	Item *q, *q1, *q2;
@@ -2027,7 +2028,7 @@ static int iondef(p_pointercount) int *p_pointercount; {
 	ioncount = 0;
 	if (point_process) {
 		ioncount = 2;
-		q = lappendstr(defs_list, "#define _nd_area  _nt->_data[_ppvar[0*_STRIDE]]\n");
+		q = lappendstr(defs_list, "#define _nd_area  _nt_data[_ppvar[0*_STRIDE]]\n");
 		q->itemtype = VERBATIM;
 		ppvar_semantics(0, "area");
 		ppvar_semantics(1, "pntproc");
@@ -2044,7 +2045,7 @@ static int iondef(p_pointercount) int *p_pointercount; {
 		q=q->next;
 		ITERATE(q1, LST(q)) {
 			SYM(q1)->nrntype |= NRNIONFLAG;
-			Sprintf(buf, "#define _ion_%s		_nt->_data[_ppvar[%d*_STRIDE]]\n",
+			Sprintf(buf, "#define _ion_%s		_nt_data[_ppvar[%d*_STRIDE]]\n",
 				SYM(q1)->name, ioncount);
 			q2 = lappendstr(defs_list, buf);
 			q2->itemtype = VERBATIM;
@@ -2062,7 +2063,7 @@ static int iondef(p_pointercount) int *p_pointercount; {
 			if (SYM(q1)->nrntype & NRNIONFLAG) {
 				SYM(q1)->nrntype &= ~NRNIONFLAG;
 			}else{
-				Sprintf(buf, "#define _ion_%s	_nt->_data[_ppvar[%d*_STRIDE]]\n",
+				Sprintf(buf, "#define _ion_%s	_nt_data[_ppvar[%d*_STRIDE]]\n",
 					SYM(q1)->name, ioncount);
 				q2 = lappendstr(defs_list, buf);
 				q2->itemtype = VERBATIM;
@@ -2078,7 +2079,7 @@ static int iondef(p_pointercount) int *p_pointercount; {
 			it = iontype(SYM(q1)->name, sion->name);
 			if (it == IONCUR) {
 				dcurdef = 1;
-Sprintf(buf, "#define _ion_di%sdv\t_nt->_data[_ppvar[%d*_STRIDE]]\n", sion->name, ioncount);
+Sprintf(buf, "#define _ion_di%sdv\t_nt_data[_ppvar[%d*_STRIDE]]\n", sion->name, ioncount);
 				q2 = lappendstr(defs_list, buf);
 				q2->itemtype = VERBATIM;
 				sprintf(buf, "  nrn_update_ion_pointer(_%s_sym, _ppvar, %d, 4);\n",
@@ -2103,7 +2104,7 @@ Sprintf(buf, "#define _style_%s\t_ppvar[%d]\n", sion->name, ioncount);
 		}
 		q=q->next;
 		if (!dcurdef && ldifuslist) {
-Sprintf(buf, "#define _ion_di%sdv\t_nt->_data[_ppvar[%d*_STRIDE]]\n", sion->name, ioncount);
+Sprintf(buf, "#define _ion_di%sdv\t_nt_data[_ppvar[%d*_STRIDE]]\n", sion->name, ioncount);
 				q2 = lappendstr(defs_list, buf);
 				q2->itemtype = VERBATIM;
 				sprintf(buf, "  nrn_update_ion_pointer(_%s_sym, _ppvar, %d, 4);\n",
@@ -2119,7 +2120,7 @@ Sprintf(buf, "#define _ion_di%sdv\t_nt->_data[_ppvar[%d*_STRIDE]]\n", sion->name
 	ITERATE(q, nrnpointers) {
 		sion = SYM(q);
 	    if (sion->nrntype & NRNPOINTER) {
-		Sprintf(buf, "#define %s	_nt->_data[_ppvar[%d*_STRIDE]]\n",
+		Sprintf(buf, "#define %s	_nt_data[_ppvar[%d*_STRIDE]]\n",
 			sion->name, ioncount + *p_pointercount);
 		ppvar_semantics(ioncount + *p_pointercount, "pointer");
 	    }

@@ -68,7 +68,7 @@ extern double hoc_Exp(double);
 #define event _p[5*_STRIDE]
 #define _v_unused _p[6*_STRIDE]
 #define _tsav _p[7*_STRIDE]
-#define _nd_area  _nt->_data[_ppvar[0*_STRIDE]]
+#define _nd_area  _nt_data[_ppvar[0*_STRIDE]]
 #define _p_uniform_rng	_nt->_vdata[_ppvar[2*_STRIDE]]
 #define _p_exp_rng	_nt->_vdata[_ppvar[3*_STRIDE]]
 #define _p_vecRate	_nt->_vdata[_ppvar[4*_STRIDE]]
@@ -732,6 +732,8 @@ double _v, v; int* _ni; int _iml, _cntml;
     _ni = _ml->_nodeindices;
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+double * _nt_data = _nt->_data;
+double * _vec_v = _nt->_actual_v;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
@@ -743,6 +745,7 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
 #endif
+    int _nd_idx = _ni[_iml];
  _tsav = -1e20;
  initmodel(_threadargs_);
 }
@@ -758,6 +761,8 @@ double v, _v = 0.0; int* _ni; int _iml, _cntml;
     _ni = _ml->_nodeindices;
 _cntml = _ml->_nodecount;
 _thread = _ml->_thread;
+double * _nt_data = _nt->_data;
+double * _vec_v = _nt->_actual_v;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
@@ -770,6 +775,7 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
 #endif
+    int _nd_idx = _ni[_iml];
  v=_v;
 {
 }}

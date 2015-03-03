@@ -70,7 +70,7 @@ static void ext_vdef() {
 #if CACHEVEC == 0
 			P("    _v = NODEV(_nd);\n");
 #else
-			P("    _v = VEC_V(_ni[_iml]);\n");
+			P("    _v = _vec_v[_nd_idx];\n");
 #endif
 			
 			P(" }\n");
@@ -79,7 +79,7 @@ static void ext_vdef() {
 			P(" _nd = _ml->_nodelist[_iml];\n");
 			P(" _v = NODEV(_nd);\n");
 #else
-			P("    _v = VEC_V(_ni[_iml]);\n");
+			P("    _v = _vec_v[_nd_idx];\n");
 #endif
 		}
 }
@@ -564,6 +564,11 @@ if (vectorize) {
 /* when vectorize = 1 */
 
 static void pr_layout_for_p(int ivdep) {
+
+    /*no pointer chasing for ions, rhs, v and d */
+	P("double * _nt_data = _nt->_data;\n");
+	P("double * _vec_v = _nt->_actual_v;\n");
+
 	P("#if LAYOUT == 1 /*AoS*/\n");
 	P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
 	P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
@@ -578,6 +583,9 @@ static void pr_layout_for_p(int ivdep) {
 	P("#if LAYOUT > 1 /*AoSoA*/\n");
 	P("#error AoSoA not implemented.\n");
 	P("#endif\n");
+
+    /* cache node index */
+	P("    int _nd_idx = _ni[_iml];\n");
 }
 
 
@@ -678,6 +686,12 @@ void c_out_vectorize(const char* prefix)
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
+	  P("double * _vec_rhs = _nt->_actual_rhs;\n");
+	  P("double * _vec_d = _nt->_actual_d;\n");
+	  if (point_process) {
+	    P("double * _vec_shadow_rhs = _nt->_shadow_rhs;\n");
+	    P("double * _vec_shadow_d = _nt->_shadow_d;\n");
+      }
 	  pr_layout_for_p(1);
 	  ext_vdef();
 	if (currents->next != currents) {
@@ -710,16 +724,17 @@ void c_out_vectorize(const char* prefix)
 	  printlist(set_ion_variables(0));
      } /* end of not conductance */
 	  if (point_process) {
-		P(" _g *=  1.e2/(_nd_area);\n");
-		P(" _rhs *= 1.e2/(_nd_area);\n");
+		P(" double _mfact =  1.e2/(_nd_area);\n");
+		P(" _g *=  _mfact;\n");
+		P(" _rhs *= _mfact;\n");
 	  }
 	if (electrode_current) {
 #if CACHEVEC == 0
 		P("	NODERHS(_nd) += _rhs;\n");
 		P("	NODED(_nd) -= _g;\n");
 #else
-		P("	VEC_RHS(_ni[_iml]) += _rhs;\n");
-		P("	VEC_D(_ni[_iml]) -= _g;\n");
+		P("	_vec_rhs[_nd_idx] += _rhs;\n");
+		P("	_vec_d[_nd_idx] -= _g;\n");
 #endif
 		P("#if EXTRACELLULAR\n");
 		P(" if (_nd->_extnode) {\n");
@@ -733,16 +748,17 @@ void c_out_vectorize(const char* prefix)
 		P("	NODED(_nd) += _g;\n");
 #else
 		if (point_process) {
-			P("	_nt->_shadow_rhs[_iml] = _rhs;\n\
-    _nt->_shadow_d[_iml] = _g;\n\
+			P("	_vec_shadow_rhs[_iml] = _rhs;\n\
+    _vec_shadow_d[_iml] = _g;\n\
  }\n\
  for (_iml = 0; _iml < _cntml; ++_iml) {\n\
-   VEC_RHS(_ni[_iml]) -= _nt->_shadow_rhs[_iml];\n\
-   VEC_D(_ni[_iml]) += _nt->_shadow_d[_iml];\n\
+   int _nd_idx = _ni[_iml];\n\
+   _vec_rhs[_nd_idx] -= _vec_shadow_rhs[_iml];\n\
+   _vec_d[_nd_idx] += _vec_shadow_d[_iml];\n\
 ");
 		}else{
-			P("	VEC_RHS(_ni[_iml]) -= _rhs;\n");
-			P("	VEC_D(_ni[_iml]) += _g;\n");
+			P("	_vec_rhs[_nd_idx] -= _rhs;\n");
+			P("	_vec_d[_nd_idx] += _g;\n");
 		}
 #endif
 	}
