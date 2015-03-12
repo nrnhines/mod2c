@@ -585,7 +585,9 @@ static void pr_layout_for_p(int ivdep) {
 	P("#endif\n");
 
     /* cache node index */
-	P("    int _nd_idx = _ni[_iml];\n");
+    if (!artificial_cell) {
+	    P("    int _nd_idx = _ni[_iml];\n");
+    }
 }
 
 
