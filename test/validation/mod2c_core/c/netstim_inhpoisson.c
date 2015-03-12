@@ -745,7 +745,6 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
 #endif
-    int _nd_idx = _ni[_iml];
  _tsav = -1e20;
  initmodel(_threadargs_);
 }
@@ -775,7 +774,6 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
 #endif
-    int _nd_idx = _ni[_iml];
  v=_v;
 {
 }}
