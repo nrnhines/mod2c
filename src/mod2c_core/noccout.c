@@ -576,7 +576,8 @@ static void pr_layout_for_p(int ivdep) {
 	P("#if LAYOUT == 0 /*SoA*/\n");
 	P(" _p = _ml->_data; _ppvar = _ml->_pdata;\n");
 	if (ivdep) {
-		P("#pragma ivdep\n");
+		P("/* insert compiler dependent ivdep like pragma */\n");
+		P("_PRAGMA_FOR_VECTOR_LOOP_\n");
 	}
 	P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
 	P("#endif\n");
