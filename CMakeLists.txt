@@ -37,7 +37,7 @@ add_subdirectory(test/validation)
 install(FILES share/nrnunits.lib DESTINATION share)
 
 set(MOD2C_CONFIG_VERSION_IN "mod2cConfigVersion.cmake.in")
-include(CommonCPack)
+include(CPackConfig)
 
 #Documentation
 set(GIT_DOCUMENTATION_REPO BBPDocumentation)
