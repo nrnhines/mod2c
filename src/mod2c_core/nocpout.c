@@ -299,14 +299,14 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma(\"clang loop vectorize(enable)\")\
 \n#elif defined(__ICC) || defined(__INTEL_COMPILER)\
 \n#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma(\"ivdep\")\
-\n#elif defined(__GNUC__) || defined(__GNUG__)\
-\n#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma(\"GCC ivdep\")\
 \n#elif defined(__IBMC__) || defined(__IBMCPP__)\
 \n#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma(\"ibm independent_loop\")\
 \n#elif defined(__PGI)\
 \n#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma(\"vector\")\
 \n#elif defined(_CRAYC)\
 \n#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma(\"_CRI ivdep\")\
+\n#elif defined(__GNUC__) || defined(__GNUG__)\
+\n#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma(\"GCC ivdep\")\
 \n#else\
 \n#define _PRAGMA_FOR_VECTOR_LOOP_\
 \n#endif // _PRAGMA_FOR_VECTOR_LOOP_\
