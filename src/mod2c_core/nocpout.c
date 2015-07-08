@@ -295,6 +295,15 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 	if (vectorize) {
         /* macros for compiler dependent ivdep like pragma and memory layout */
 		Lappendstr(defs_list, "\
+\n#if defined(_OPENACC)\
+\n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu)\")\
+\n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu)\")\
+\n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _vec_shadow_rhs[0:_nt->shadow_rhs_cnt], _vec_shadow_d[0:_nt->shadow_rhs_cnt], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu)\")\
+\n#else\
+\n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"\")\
+\n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"\")\
+\n#endif\
+\n \
 \n#if defined(__clang__)\
 \n#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma(\"clang loop vectorize(enable)\")\
 \n#elif defined(__ICC) || defined(__INTEL_COMPILER)\

@@ -40,6 +40,12 @@ extern Symbol* cvode_nrn_current_solve_;
 extern List* state_discon_list_;
 #endif
 
+#define NRN_INIT 0
+#define NRN_JACOB 1
+#define NRN_STATE 2
+#define NRN_CUR 3
+#define NRN_CUR_SYN 4
+
 /* VECTORIZE has not been optional for years. We leave the define there but */
 /* we no longer update the #else clauses. */
 #if VECTORIZE
@@ -563,7 +569,7 @@ if (vectorize) {
 #if VECTORIZE
 /* when vectorize = 1 */
 
-static void pr_layout_for_p(int ivdep) {
+static void pr_layout_for_p(int ivdep, int fun_type) {
 
     /*no pointer chasing for ions, rhs, v and d */
 	P("double * _nt_data = _nt->_data;\n");
@@ -578,6 +584,12 @@ static void pr_layout_for_p(int ivdep) {
 	if (ivdep) {
 		P("/* insert compiler dependent ivdep like pragma */\n");
 		P("_PRAGMA_FOR_VECTOR_LOOP_\n");
+        if(fun_type == NRN_STATE)
+		    P("_PRAGMA_FOR_STATE_ACC_LOOP_\n");
+        if(fun_type == NRN_CUR)
+		    P("_PRAGMA_FOR_CUR_ACC_LOOP_\n");
+        if(fun_type == NRN_CUR_SYN)
+		    P("_PRAGMA_FOR_CUR_SYN_ACC_LOOP_\n");
 	}
 	P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
 	P("#endif\n");
@@ -647,7 +659,7 @@ void c_out_vectorize(const char* prefix)
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
 	/*check_tables();*/
-	  pr_layout_for_p(0);
+	  pr_layout_for_p(0, NRN_INIT);
 	check_tables();
 	if (debugging_ && net_receive_) {
 		P(" _tsav = -1e20;\n");
@@ -695,7 +707,10 @@ void c_out_vectorize(const char* prefix)
 	    P("double * _vec_shadow_rhs = _nt->_shadow_rhs;\n");
 	    P("double * _vec_shadow_d = _nt->_shadow_d;\n");
       }
-	  pr_layout_for_p(1);
+      if(point_process)
+	    pr_layout_for_p(1, NRN_CUR_SYN);
+      else
+	    pr_layout_for_p(1, NRN_CUR);
 	  ext_vdef();
 	if (currents->next != currents) {
 	  printlist(get_ion_variables(0));
@@ -778,7 +793,7 @@ void c_out_vectorize(const char* prefix)
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
-	  pr_layout_for_p(0);
+	  pr_layout_for_p(0, NRN_JACOB);
 	if (electrode_current) {
 #if CACHEVEC == 0
 		P("	NODED(_nd) -= _g;\n");
@@ -811,7 +826,7 @@ void c_out_vectorize(const char* prefix)
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
-	  pr_layout_for_p(1);
+	  pr_layout_for_p(1, NRN_STATE);
 	  ext_vdef();
 	  P(" v=_v;\n{\n");
 	  printlist(get_ion_variables(1));
