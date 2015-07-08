@@ -302,6 +302,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n#else\
 \n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"\")\
+\n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"\")\
 \n#endif\
 \n \
 \n#if defined(__clang__)\
