@@ -574,6 +574,7 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
     /*no pointer chasing for ions, rhs, v and d */
 	P("double * _nt_data = _nt->_data;\n");
 	P("double * _vec_v = _nt->_actual_v;\n");
+    P("int stream_id = _nt->stream_id;\n");
 
 	P("#if LAYOUT == 1 /*AoS*/\n");
 	P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
