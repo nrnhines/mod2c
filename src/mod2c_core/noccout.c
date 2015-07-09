@@ -574,7 +574,7 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
     /*no pointer chasing for ions, rhs, v and d */
 	P("double * _nt_data = _nt->_data;\n");
 	P("double * _vec_v = _nt->_actual_v;\n");
-    P("int stream_id = _nt->stream_id;\n");
+        P("int stream_id = _nt->stream_id;\n");
 
 	P("#if LAYOUT == 1 /*AoS*/\n");
 	P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
@@ -767,14 +767,29 @@ void c_out_vectorize(const char* prefix)
 		P("	NODED(_nd) += _g;\n");
 #else
 		if (point_process) {
+
+		    P("#ifdef _OPENACC\n");
+            P("     #pragma acc atomic update\n");
+            P("    _vec_rhs[_nd_idx] -= _rhs;\n");
+            P("     #pragma acc atomic update\n");
+            P("    _vec_d[_nd_idx] += _g;\n");
+		    P("#else\n");
+
 			P("	_vec_shadow_rhs[_iml] = _rhs;\n\
     _vec_shadow_d[_iml] = _g;\n\
+                   #endif\n\
  }\n\
+#ifndef _OPENACC\n\
  for (_iml = 0; _iml < _cntml; ++_iml) {\n\
    int _nd_idx = _ni[_iml];\n\
    _vec_rhs[_nd_idx] -= _vec_shadow_rhs[_iml];\n\
    _vec_d[_nd_idx] += _vec_shadow_d[_iml];\n\
+#else\n\
+  {\n\
+#endif\n\
 ");
+
+
 		}else{
 			P("	_vec_rhs[_nd_idx] -= _rhs;\n");
 			P("	_vec_d[_nd_idx] += _g;\n");
