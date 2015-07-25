@@ -769,26 +769,35 @@ void c_out_vectorize(const char* prefix)
 		if (point_process) {
 
 		    P("#ifdef _OPENACC\n");
+            P("  if(_nt->compute_gpu) {\n");
             P("     #pragma acc atomic update\n");
             P("    _vec_rhs[_nd_idx] -= _rhs;\n");
             P("     #pragma acc atomic update\n");
             P("    _vec_d[_nd_idx] += _g;\n");
+            P("  } else {\n");
+            P("     _vec_shadow_rhs[_iml] = _rhs;\n");
+            P("     _vec_shadow_d[_iml] = _g;\n");
+            P("  }\n");
 		    P("#else\n");
 
 			P("	_vec_shadow_rhs[_iml] = _rhs;\n\
     _vec_shadow_d[_iml] = _g;\n\
-                   #endif\n\
+#endif\n\
  }\n\
-#ifndef _OPENACC\n\
+#ifdef _OPENACC\n\
+    if(!(_nt->compute_gpu)) { \n\
+        for (_iml = 0; _iml < _cntml; ++_iml) {\n\
+           int _nd_idx = _ni[_iml];\n\
+           _vec_rhs[_nd_idx] -= _vec_shadow_rhs[_iml];\n\
+           _vec_d[_nd_idx] += _vec_shadow_d[_iml];\n\
+        }\n\
+#else\n\
  for (_iml = 0; _iml < _cntml; ++_iml) {\n\
    int _nd_idx = _ni[_iml];\n\
    _vec_rhs[_nd_idx] -= _vec_shadow_rhs[_iml];\n\
    _vec_d[_nd_idx] += _vec_shadow_d[_iml];\n\
-#else\n\
-  {\n\
 #endif\n\
 ");
-
 
 		}else{
 			P("	_vec_rhs[_nd_idx] -= _rhs;\n");
