@@ -1013,12 +1013,12 @@ Sprintf(buf, "\"%s\", %g,\n", s->name, d1);
 		}
 	}
 	if (net_receive_) {
-		Lappendstr(defs_list, "static void _net_receive(Point_process*, double*, double);\n");
+		Lappendstr(defs_list, "static void _net_receive(Point_process*, int, double);\n");
 		if (for_netcons_) {
 			Lappendstr(defs_list, "extern int _nrn_netcon_args(void*, double***);\n");
 		}
 		if (net_init_q1_) {
-			Lappendstr(defs_list, "static void _net_init(Point_process*, double*, double);\n");
+			Lappendstr(defs_list, "static void _net_init(Point_process*, int, double);\n");
 		}
 	}
 	if (vectorize && thread_mem_init_list->next != thread_mem_init_list) {
@@ -2603,6 +2603,7 @@ sprintf(b, "if (_nt->_vcv) { _ode_spec%d(); }\n", cvode_num_);
 const char* net_boilerplate() {
 	sprintf(buf, "\n\
    _thread = (ThreadDatum*)0; _nt = nrn_threads + _pnt->_tid;\n\
+   _args = _nt->_weights + _weight_index;\n\
    _ml = _nt->_ml_list[_pnt->_type];\n\
    _cntml = _ml->_nodecount;\n\
    _iml = _pnt->_i_instance;\n\
@@ -2634,7 +2635,7 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 	}
 	net_receive_ = 1;
 	deltokens(qp1, qp2);
-	insertstr(qstmt, "(Point_process* _pnt, double* _args, double _lflag)");
+	insertstr(qstmt, "(Point_process* _pnt, int _weight_index, double _lflag)");
 	i = 0;
 	ITERATE(q1, qarg) if (q1->next != qarg) { /* skip last "flag" arg */
 		s = SYM(q1);
@@ -2650,7 +2651,7 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 	q = insertstr(qstmt, "\n{");
 	vectorize_substitute(q, "\n\
 {  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt; double v;\n\
-   _Memb_list* _ml; int _cntml; int _iml;\n\
+   _Memb_list* _ml; int _cntml; int _iml; double* _args;\n\
 ");
 	if (watch_seen_) {
 		insertstr(qstmt, "  int _watch_rm = 0;\n");
@@ -2730,10 +2731,10 @@ void net_init(qinit, qp2)
 	Item* qinit, *qp2;
 {
 	/* qinit=INITIAL { stmtlist qp2=} */
-	replacstr(qinit, "\nstatic void _net_init(Point_process* _pnt, double* _args, double _lflag)");
+	replacstr(qinit, "\nstatic void _net_init(Point_process* _pnt, int _weight_index, double _lflag)");
 	vectorize_substitute(insertstr(qinit->next->next, ""), "\n\
    double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt;\n\
-   _Memb_list* _ml; int _cntml; int _iml;\n\
+   _Memb_list* _ml; int _cntml; int _iml; double* _args;\n\
 ");
 	vectorize_substitute(insertstr(qinit->next->next->next, ""), net_boilerplate());
 	if (net_init_q1_) {
