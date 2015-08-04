@@ -134,6 +134,20 @@ extern List *set_ion_variables(), *get_ion_variables();
 static int decode_limits();
 static int decode_tolerance();
 
+/* 1 means emit the relevant code since the model
+   is a POINT_PROCESS with a NET_RECEIVE block and no net_send
+   and so the NET_RECEIVE body can be executed on the GPU.
+   _net_receive buffers the event for this type and thread and at the
+   end of NetCvode::deliver_net_events, _net_buffer_receive is called
+   so that the buffered events are
+   delivered on the gpu all at once for this type and thread.
+   In the c file, the define NET_RECEIVE_BUFFERING is used to conditionally
+   compile the NET_RECEIVE block buffering code.
+*/
+int net_receive_buffering_;
+static void emit_net_receive_buffering_code();
+
+
 /* NEURON block information */
 List *currents;
 List *useion;
@@ -185,6 +199,8 @@ int net_event_seen_;
 int watch_seen_; /* number of WATCH statements + 1*/
 static Item* net_send_delivered_; /* location for if flag is 1 then clear the
 				tqitem_ to allow  an error message for net_move */
+static Item* net_receive_block_begin_; /* the "static void _net_receive" line */
+static Item* net_receive_block_open_brace_; /* the "{" line */
 #endif
 
 #define SYMITER(arg) ITERATE(q, syminorder){ \
@@ -273,6 +289,12 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 		rsuffix = suffix;
 	}
 
+	if (point_process && !artificial_cell && net_receive_
+	  && !net_send_seen_ && !net_event_seen_) {
+	  	net_receive_buffering_ = 1;
+		emit_net_receive_buffering_code();
+	}
+
 	Lappendstr(defs_list, "\
 \n#include \"coreneuron/nrnoc/md1redef.h\"\
 \n#include \"coreneuron/nrnconf.h\"\
@@ -329,6 +351,15 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n");
 	}
 
+	if (net_receive_buffering_) {
+		Lappendstr(defs_list, "\
+\n\
+\n#if !defined(NET_RECEIVE_BUFFERING)\
+\n#define NET_RECEIVE_BUFFERING 1\
+\n#endif\
+\n");
+	}
+
 #if 1
 	/* for easier profiling, give distinct names to otherwise reused static names */
 	sprintf(buf, "\n\
@@ -340,6 +371,17 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 #define _net_receive _net_receive_%s\
 ", suffix, suffix, suffix, suffix, suffix, suffix);
 	Lappendstr(defs_list, buf);
+
+	if (net_receive_buffering_) {
+		sprintf(buf, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n#define _net_buf_receive _net_buf_receive_%s\
+\nstatic void _net_buf_receive(_NrnThread*);\
+\n#endif\
+\n", suffix);
+		Lappendstr(defs_list, buf);
+	}
+
 	SYMLISTITER {
 		Symbol* s = SYM(q);
 		/* note that with GLOBFUNCT, FUNCT will be redefined anyway */
@@ -1192,6 +1234,13 @@ located in a section and is not associated with an integrator\n"
 	}
 	if (net_event_seen_) {
 		Lappendstr(defs_list, "add_nrn_has_net_event(_mechtype);\n");
+	}
+	if (net_receive_buffering_) {
+		Lappendstr(defs_list, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n  hoc_register_net_receive_buffering(_net_buf_receive, _mechtype);\
+\n#endif\
+\n");
 	}
 	if (net_receive_) {
 		Lappendstr(defs_list, "pnt_receive[_mechtype] = _net_receive;\n");
@@ -2620,8 +2669,58 @@ const char* net_boilerplate() {
 	return buf;
 }
 
-void net_receive(qarg, qp1, qp2, qstmt, qend)
-	Item* qarg, *qp1, *qp2, *qstmt, *qend;
+void emit_net_receive_buffering_code() {
+	Item* q;
+	if (!net_receive_buffering_) { return; }
+	q = net_receive_block_begin_;
+	insertstr(q, "\n#if NET_RECEIVE_BUFFERING");
+
+	sprintf(buf, "\
+\nstatic void _net_receive_kernel(Point_process*, int _weight_index, double _flag);\
+\nstatic void _net_buf_receive(_NrnThread* _nt) {\
+\n  _Memb_list* _ml = _nt->_ml_list[_mechtype];\
+\n  if (!_ml) { return; }\
+\n  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer;\
+\n  int _i;\
+\n  Point_process* _pnt = _nt->pntprocs + _nrb->_pnt_offset;\
+\n  for (_i = 0; _i < _nrb->_cnt; ++_i) {\
+\n    _net_receive_kernel(_pnt + _nrb->_pnt_index[_i], _nrb->_weight_index[_i], 0.0);\
+\n  }\
+\n  _nrb->_cnt = 0;\
+\n  /*printf(\"_net_buf_receive_%s  %%d\\n\", _nt->_id);*/\
+\n}\
+\n", suffix);
+	insertstr(q, buf);
+
+	sprintf(buf, "\
+\nstatic void _net_receive (Point_process* _pnt, int _weight_index, double _lflag) {\
+\n  _NrnThread* _nt = nrn_threads + _pnt->_tid;\
+\n  NetReceiveBuffer_t* _nrb = _nt->_ml_list[_mechtype]->_net_receive_buffer;\
+\n  if (_nrb->_cnt >= _nrb->_size){\
+\n    _nrb->_size *= 2;\
+\n    _nrb->_pnt_index = (int*)erealloc(_nrb->_pnt_index, _nrb->_size*sizeof(int));\
+\n    _nrb->_weight_index = (int*)erealloc(_nrb->_weight_index, _nrb->_size*sizeof(int));\
+\n  }\
+\n  _nrb->_pnt_index[_nrb->_cnt] = _pnt->_i_instance;\
+\n  _nrb->_weight_index[_nrb->_cnt] = _weight_index;\
+\n  ++_nrb->_cnt;\
+\n}\
+\n");
+	insertstr(q, buf);
+
+	sprintf(buf, "\
+\nstatic void _net_receive_kernel(Point_process* _pnt, int _weight_index, double _lflag)\
+\n#else\
+\n");
+	insertstr(q, buf);
+
+	/* close off */
+	q = net_receive_block_open_brace_;
+	insertstr(q, "\n#endif\n");
+}
+
+void net_receive(qblk, qarg, qp1, qp2, qstmt, qend)
+	Item* qblk, *qarg, *qp1, *qp2, *qstmt, *qend;
 {
 	Item* q, *q1;
 	Symbol* s;
@@ -2634,6 +2733,7 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 		diag("NET_RECEIVE can only exist in a POINT_PROCESS", (char*)0);
 	}
 	net_receive_ = 1;
+	net_receive_block_begin_ = qblk;
 	deltokens(qp1, qp2);
 	insertstr(qstmt, "(Point_process* _pnt, int _weight_index, double _lflag)");
 	i = 0;
@@ -2649,6 +2749,7 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 	}
 	net_send_delivered_ = qstmt;
 	q = insertstr(qstmt, "\n{");
+	net_receive_block_open_brace_ = q;
 	vectorize_substitute(q, "\n\
 {  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt; double v;\n\
    _Memb_list* _ml; int _cntml; int _iml; double* _args;\n\
