@@ -910,7 +910,7 @@ diag("NET_RECEIVE block"," must have at least one argument");
 		replacstr($1, "\nstatic void _net_receive");
 		movelist($1, $7, procfunc);
 #if NMODL
-		net_receive($3, $2, $4, $6, $7);
+		net_receive($1, $3, $2, $4, $6, $7);
 #endif
 		poplocal(); freelist(&$3);
 		}

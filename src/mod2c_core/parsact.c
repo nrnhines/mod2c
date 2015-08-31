@@ -1068,9 +1068,9 @@ Fprintf(stderr, "Notice: Use of state_discontinuity in a NET_RECEIVE block is un
 			}
 			Insertstr(qexpr, "t + ");
 			if (blocktype == NETRECEIVE) {
-				Insertstr(qpar1->next, "_tqitem, _args, _pnt,");
+				Insertstr(qpar1->next, "_tqitem, _weight_index, _pnt,");
 			}else if (blocktype == INITIAL1){
-				Insertstr(qpar1->next, "_tqitem, (double*)0, _nt->_vdata[_ppvar[1*_STRIDE]],");
+				Insertstr(qpar1->next, "_tqitem, 0, _nt->_vdata[_ppvar[1*_STRIDE]],");
 			}else{
 diag("net_send allowed only in INITIAL and NET_RECEIVE blocks", (char*)0);
 			}
