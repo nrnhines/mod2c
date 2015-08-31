@@ -14,7 +14,11 @@ include(GitExternal)
 
 set(MOD2C_DESCRIPTION "MOD2C converter")
 include(Common)
-include(FindPackages)
+
+if(BLUEGENE)
+  set(CMAKE_C_COMPILER "xlc")
+  set(CMAKE_CXX_COMPILER "xlc++")
+endif()
 
 # treat white-space separated string as a list
 macro(wslist listcmd listvar)
