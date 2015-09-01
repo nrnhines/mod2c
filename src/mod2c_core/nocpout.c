@@ -2688,6 +2688,7 @@ void emit_net_receive_buffering_code() {
 	sprintf(buf, "\
 \nstatic void _net_receive_kernel(Point_process*, int _weight_index, double _flag);\
 \nstatic void _net_buf_receive(_NrnThread* _nt) {\
+\n  if (!_nt->_ml_list) { return; }\
 \n  _Memb_list* _ml = _nt->_ml_list[_mechtype];\
 \n  if (!_ml) { return; }\
 \n  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer;\
