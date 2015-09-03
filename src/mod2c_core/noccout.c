@@ -585,7 +585,7 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
 	if (ivdep) {
 		P("/* insert compiler dependent ivdep like pragma */\n");
 		P("_PRAGMA_FOR_VECTOR_LOOP_\n");
-        if(fun_type == NRN_STATE)
+        if(fun_type == NRN_STATE || fun_type == NRN_INIT)
 		    P("_PRAGMA_FOR_STATE_ACC_LOOP_\n");
         if(fun_type == NRN_CUR)
 		    P("_PRAGMA_FOR_CUR_ACC_LOOP_\n");
@@ -660,7 +660,7 @@ void c_out_vectorize(const char* prefix)
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
 	/*check_tables();*/
-	  pr_layout_for_p(0, NRN_INIT);
+	  pr_layout_for_p(1, NRN_INIT);
 	check_tables();
 	if (debugging_ && net_receive_) {
 		P(" _tsav = -1e20;\n");
