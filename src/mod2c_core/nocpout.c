@@ -321,10 +321,12 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _vec_shadow_rhs[0:_nt->shadow_rhs_cnt], _vec_shadow_d[0:_nt->shadow_rhs_cnt], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
+\n#define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma(\"acc parallel loop present(_pnt[0:_ml->nodecount], _nrb[0:1], nrn_threads[0:nrn_nthread]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#else\
 \n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"\")\
+\n#define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma(\"\")\
 \n#endif\
 \n \
 \n#if defined(__clang__)\
@@ -2045,7 +2047,7 @@ Sprintf(buf, " _ion_%s = %s;\n", SYM(q1)->name, SYM(q1)->name);
 				assert(0);
 			}
 /* first arg is just for the charge, second is pointer to erev, third ard is the style*/
-			Sprintf(buf, " nrn_wrote_conc(_%s_type, (&(_ion_%s)) - %d, _style_%s);\n",
+			Sprintf(buf, " //nrn_wrote_conc(_%s_type, (&(_ion_%s)) - %d, _style_%s);\n",
 				in, SYM(qconc)->name, ic, in);
 			Lappendstr(l, buf);
 		}
@@ -2661,8 +2663,11 @@ sprintf(b, "if (_nt->_vcv) { _ode_spec%d(); }\n", cvode_num_);
 
 const char* net_boilerplate() {
 	sprintf(buf, "\n\
-   _thread = (ThreadDatum*)0; _nt = nrn_threads + _pnt->_tid;\n\
-   _args = _nt->_weights + _weight_index;\n\
+   _thread = (ThreadDatum*)0; \n\
+   int _tid = _pnt->_tid; \n\
+   _nt = nrn_threads + _tid;\n\
+   double *_weights = _nt->_weights;\n\
+   _args = _weights + _weight_index;\n\
    _ml = _nt->_ml_list[_pnt->_type];\n\
    _cntml = _ml->_nodecount;\n\
    _iml = _pnt->_i_instance;\n\
@@ -2692,10 +2697,14 @@ void emit_net_receive_buffering_code() {
 \n  _Memb_list* _ml = _nt->_ml_list[_mechtype];\
 \n  if (!_ml) { return; }\
 \n  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer;\
-\n  int _i;\
+\n  int _i, _j, _k;\
+\n  int stream_id = _nt->stream_id;\
 \n  Point_process* _pnt = _nt->pntprocs + _nrb->_pnt_offset;\
+\n  _PRAGMA_FOR_NETRECV_ACC_LOOP_ \
 \n  for (_i = 0; _i < _nrb->_cnt; ++_i) {\
-\n    _net_receive_kernel(_pnt + _nrb->_pnt_index[_i], _nrb->_weight_index[_i], 0.0);\
+\n    _j = _nrb->_pnt_index[_i];\
+\n    _k = _nrb->_weight_index[_i];\
+\n    _net_receive_kernel(_pnt + _j, _k, 0.0);\
 \n  }\
 \n  _nrb->_cnt = 0;\
 \n  /*printf(\"_net_buf_receive_%s  %%d\\n\", _nt->_id);*/\
@@ -2711,6 +2720,7 @@ void emit_net_receive_buffering_code() {
 \n    _nrb->_size *= 2;\
 \n    _nrb->_pnt_index = (int*)erealloc(_nrb->_pnt_index, _nrb->_size*sizeof(int));\
 \n    _nrb->_weight_index = (int*)erealloc(_nrb->_weight_index, _nrb->_size*sizeof(int));\
+\n    _nrb->reallocated = 1;\
 \n  }\
 \n  _nrb->_pnt_index[_nrb->_cnt] = _pnt->_i_instance;\
 \n  _nrb->_weight_index[_nrb->_cnt] = _weight_index;\
@@ -2771,7 +2781,7 @@ void net_receive(qblk, qarg, qp1, qp2, qstmt, qend)
 	q = insertstr(qstmt, net_boilerplate());
 	if (debugging_) {
 	    if (1) {
-		insertstr(qstmt, " assert(_tsav <= t); _tsav = t;");
+		insertstr(qstmt, " #if !defined(_OPENACC) \n assert(_tsav <= t); \n #endif \n _tsav = t;");
 	    }else{
 		insertstr(qstmt, " if (_tsav > t){ extern char* hoc_object_name(); hoc_execerror(hoc_object_name(_pnt->ob), \":Event arrived out of order. Must call ParallelContext.set_maxstep AFTER assigning minimum NetCon.delay\");}\n _tsav = t;");
 	    }
