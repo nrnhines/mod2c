@@ -585,7 +585,9 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
 	if (ivdep) {
 		P("/* insert compiler dependent ivdep like pragma */\n");
 		P("_PRAGMA_FOR_VECTOR_LOOP_\n");
-        if(fun_type == NRN_STATE || fun_type == NRN_INIT)
+        if(fun_type == NRN_INIT)
+		    P("_PRAGMA_FOR_INIT_ACC_LOOP_\n");
+        if(fun_type == NRN_STATE)
 		    P("_PRAGMA_FOR_STATE_ACC_LOOP_\n");
         if(fun_type == NRN_CUR)
 		    P("_PRAGMA_FOR_CUR_ACC_LOOP_\n");
