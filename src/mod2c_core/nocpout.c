@@ -2676,7 +2676,9 @@ void emit_net_receive_buffering_code() {
 	insertstr(q, "\n#if NET_RECEIVE_BUFFERING");
 
 	sprintf(buf, "\
-\nstatic void _net_receive_kernel(Point_process*, int _weight_index, double _flag);\
+\n#undef t\
+\n#define t _nrb_t\
+\nstatic void _net_receive_kernel(double, Point_process*, int _weight_index, double _flag);\
 \nstatic void _net_buf_receive(_NrnThread* _nt) {\
 \n  if (!_nt->_ml_list) { return; }\
 \n  _Memb_list* _ml = _nt->_ml_list[_mechtype];\
@@ -2685,7 +2687,7 @@ void emit_net_receive_buffering_code() {
 \n  int _i;\
 \n  Point_process* _pnt = _nt->pntprocs + _nrb->_pnt_offset;\
 \n  for (_i = 0; _i < _nrb->_cnt; ++_i) {\
-\n    _net_receive_kernel(_pnt + _nrb->_pnt_index[_i], _nrb->_weight_index[_i], 0.0);\
+\n    _net_receive_kernel(_nrb->_nrb_t[_i], _pnt + _nrb->_pnt_index[_i], _nrb->_weight_index[_i], 0.0);\
 \n  }\
 \n  _nrb->_cnt = 0;\
 \n  /*printf(\"_net_buf_receive_%s  %%d\\n\", _nt->_id);*/\
@@ -2701,16 +2703,18 @@ void emit_net_receive_buffering_code() {
 \n    _nrb->_size *= 2;\
 \n    _nrb->_pnt_index = (int*)erealloc(_nrb->_pnt_index, _nrb->_size*sizeof(int));\
 \n    _nrb->_weight_index = (int*)erealloc(_nrb->_weight_index, _nrb->_size*sizeof(int));\
+\n    _nrb->_nrb_t = (double*)erealloc(_nrb->_nrb_t, _nrb->_size*sizeof(double));\
 \n  }\
 \n  _nrb->_pnt_index[_nrb->_cnt] = _pnt->_i_instance;\
 \n  _nrb->_weight_index[_nrb->_cnt] = _weight_index;\
+\n  _nrb->_nrb_t[_nrb->_cnt] = _nt->_t;\
 \n  ++_nrb->_cnt;\
 \n}\
 \n");
 	insertstr(q, buf);
 
 	sprintf(buf, "\
-\nstatic void _net_receive_kernel(Point_process* _pnt, int _weight_index, double _lflag)\
+\nstatic void _net_receive_kernel(double _nrb_t, Point_process* _pnt, int _weight_index, double _lflag)\
 \n#else\
 \n");
 	insertstr(q, buf);
@@ -2767,6 +2771,13 @@ void net_receive(qblk, qarg, qp1, qp2, qstmt, qend)
 	    }
 	}
 	insertstr(qend, "}");
+insertstr(qend, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n#undef t\
+\n#define t _nt->_t\
+\n#endif\
+\n");
+
 	if (!artificial_cell) {
 		Symbol* ions[10]; int j, nion=0;
 		/* v can be changed in the NET_RECEIVE block since it is
