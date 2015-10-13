@@ -1985,8 +1985,8 @@ Sprintf(buf, " _ion_%s = %s;\n", SYM(q1)->name, SYM(q1)->name);
 			}else{
 				assert(0);
 			}
-/* first arg is just for the charge, second is pointer to erev, third ard is the style*/
-			Sprintf(buf, " nrn_wrote_conc(_%s_type, (&(_ion_%s)) - %d, _style_%s);\n",
+/* first arg is for the charge and memb_list, second and third give pointer to erev, fourth arg is the style, fifth needed for figuring out _cntml if SoA*/
+			Sprintf(buf, " nrn_wrote_conc(_%s_type, &(_ion_%s), %d, _style_%s, _nt);\n",
 				in, SYM(qconc)->name, ic, in);
 			Lappendstr(l, buf);
 		}
