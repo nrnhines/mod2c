@@ -25,6 +25,22 @@ extern int _method3;
 extern double hoc_Exp(double);
 #endif
  
+#if defined(__clang__)
+#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma("clang loop vectorize(enable)")
+#elif defined(__ICC) || defined(__INTEL_COMPILER)
+#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma("ivdep")
+#elif defined(__IBMC__) || defined(__IBMCPP__)
+#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma("ibm independent_loop")
+#elif defined(__PGI)
+#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma("vector")
+#elif defined(_CRAYC)
+#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma("_CRI ivdep")
+#elif defined(__GNUC__) || defined(__GNUG__)
+#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma("GCC ivdep")
+#else
+#define _PRAGMA_FOR_VECTOR_LOOP_
+#endif // _PRAGMA_FOR_VECTOR_LOOP_
+ 
 #if !defined(LAYOUT)
 /* 1 means AoS, >1 means AoSoA, <= 0 means SOA */
 #define LAYOUT 1
@@ -32,7 +48,7 @@ extern double hoc_Exp(double);
 #if LAYOUT >= 1
 #define _STRIDE LAYOUT
 #else
-#define _STRIDE _cntml + _iml
+#define _STRIDE _cntml_padded + _iml
 #endif
  
 #define nrn_init _nrn_init__NaTs2_t
@@ -44,10 +60,10 @@ extern double hoc_Exp(double);
 #define rates rates__NaTs2_t 
 #define states states__NaTs2_t 
  
-#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt, v,
-#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,
-#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt, v
-#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v
+#define _threadargscomma_ _iml, _cntml_padded, _p, _ppvar, _thread, _nt, v,
+#define _threadargsprotocomma_ int _iml, int _cntml_padded, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,
+#define _threadargs_ _iml, _cntml_padded, _p, _ppvar, _thread, _nt, v
+#define _threadargsproto_ int _iml, int _cntml_padded, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v
  	/*SUPPRESS 761*/
 	/*SUPPRESS 762*/
 	/*SUPPRESS 763*/
@@ -292,19 +308,20 @@ static void initmodel(_threadargsproto_) {
 
 static void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
-double _v, v; int* _ni; int _iml, _cntml;
+double _v, v; int* _ni; int _iml, _cntml_padded, _cntml_actual;
     _ni = _ml->_nodeindices;
-_cntml = _ml->_nodecount;
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
 _thread = _ml->_thread;
 double * _nt_data = _nt->_data;
 double * _vec_v = _nt->_actual_v;
 #if LAYOUT == 1 /*AoS*/
-for (_iml = 0; _iml < _cntml; ++_iml) {
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
 #endif
 #if LAYOUT == 0 /*SoA*/
  _p = _ml->_data; _ppvar = _ml->_pdata;
-for (_iml = 0; _iml < _cntml; ++_iml) {
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
@@ -328,22 +345,25 @@ static double _nrn_current(_threadargsproto_, double _v){double _current=0.;v=_v
 
 static void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
-int* _ni; double _rhs, _g, _v, v; int _iml, _cntml;
+int* _ni; double _rhs, _g, _v, v; int _iml, _cntml_padded, _cntml_actual;
     _ni = _ml->_nodeindices;
-_cntml = _ml->_nodecount;
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
 _thread = _ml->_thread;
 double * _vec_rhs = _nt->_actual_rhs;
 double * _vec_d = _nt->_actual_d;
 double * _nt_data = _nt->_data;
 double * _vec_v = _nt->_actual_v;
 #if LAYOUT == 1 /*AoS*/
-for (_iml = 0; _iml < _cntml; ++_iml) {
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
 #endif
 #if LAYOUT == 0 /*SoA*/
  _p = _ml->_data; _ppvar = _ml->_pdata;
-#pragma ivdep
-for (_iml = 0; _iml < _cntml; ++_iml) {
+/* insert compiler dependent ivdep like pragma */
+_PRAGMA_FOR_VECTOR_LOOP_
+#pragma vector aligned
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
@@ -368,20 +388,23 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 
 static void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
-double v, _v = 0.0; int* _ni; int _iml, _cntml;
+double v, _v = 0.0; int* _ni; int _iml, _cntml_padded, _cntml_actual;
     _ni = _ml->_nodeindices;
-_cntml = _ml->_nodecount;
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
 _thread = _ml->_thread;
 double * _nt_data = _nt->_data;
 double * _vec_v = _nt->_actual_v;
 #if LAYOUT == 1 /*AoS*/
-for (_iml = 0; _iml < _cntml; ++_iml) {
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
 #endif
 #if LAYOUT == 0 /*SoA*/
  _p = _ml->_data; _ppvar = _ml->_pdata;
-#pragma ivdep
-for (_iml = 0; _iml < _cntml; ++_iml) {
+/* insert compiler dependent ivdep like pragma */
+_PRAGMA_FOR_VECTOR_LOOP_
+#pragma vector aligned
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
@@ -401,7 +424,8 @@ static void terminal(){}
 static void _initlists(){
  double _x; double* _p = &_x;
  int _i; static int _first = 1;
- int _cntml=0;
+ int _cntml_actual=0;
+ int _cntml_padded=0;
  int _iml=0;
   if (!_first) return;
  _slist1[0] = &(m) - _p;  _dlist1[0] = &(Dm) - _p;
