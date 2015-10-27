@@ -319,7 +319,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
          * except that sync clause absent because we saw issue only in CaDynamics_E2 */
 		Lappendstr(defs_list, "\
 \n#if defined(_OPENACC)\
-\n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu)\")\
+\n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1]) if(_nt->compute_gpu)\")\
 \n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml], _nt_data[0:_nt->_ndata], _p[0:_cntml*_psize], _ppvar[0:_cntml*_ppsize], _vec_v[0:_nt->end], _vec_shadow_rhs[0:_nt->shadow_rhs_cnt], _vec_shadow_d[0:_nt->shadow_rhs_cnt], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
@@ -2050,8 +2050,10 @@ Sprintf(buf, " _ion_%s = %s;\n", SYM(q1)->name, SYM(q1)->name);
 				assert(0);
 			}
 /* first arg is just for the charge, second is pointer to erev, third ard is the style*/
-			Sprintf(buf, " //nrn_wrote_conc(_%s_type, (&(_ion_%s)) - %d, _style_%s);\n",
-				in, SYM(qconc)->name, ic, in);
+			Sprintf(buf, "    double *_pe = (&(_ion_%s)) - %d;\n", SYM(qconc)->name, ic);
+			Lappendstr(l, buf);
+			Sprintf(buf, "    nrn_wrote_conc(_%s_type, _pe, _style_%s, nrn_ion_global_map, celsius);\n",
+				in, in);
 			Lappendstr(l, buf);
 		}
 	}

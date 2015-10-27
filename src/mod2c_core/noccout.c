@@ -662,7 +662,14 @@ void c_out_vectorize(const char* prefix)
 	  P("_cntml = _ml->_nodecount;\n");
 	  P("_thread = _ml->_thread;\n");
 	/*check_tables();*/
-	  pr_layout_for_p(1, NRN_INIT);
+
+     /* @todo: will be done once anyway but it seems like this is bein copied
+      * in many other places. See CNEUR-134 */
+     P("\n #pragma acc declare present_or_copyin (celsius)\n");
+
+	 pr_layout_for_p(1, NRN_INIT);
+
+
 	check_tables();
 	if (debugging_ && net_receive_) {
 		P(" _tsav = -1e20;\n");
