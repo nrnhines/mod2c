@@ -260,7 +260,7 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
   cai = _ion_cai;
  initmodel(_threadargs_);
   _ion_cai = cai;
-  nrn_wrote_conc(_ca_type, (&(_ion_cai)) - 1, _style_ca);
+  nrn_wrote_conc(_ca_type, &(_ion_cai), 1, _style_ca, _nt);
 }
 }
 
