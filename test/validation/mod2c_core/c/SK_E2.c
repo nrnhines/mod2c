@@ -348,7 +348,6 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data; _ppvar = _ml->_pdata;
 /* insert compiler dependent ivdep like pragma */
 _PRAGMA_FOR_VECTOR_LOOP_
-#pragma vector aligned
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
 #if LAYOUT > 1 /*AoSoA*/
@@ -390,7 +389,6 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data; _ppvar = _ml->_pdata;
 /* insert compiler dependent ivdep like pragma */
 _PRAGMA_FOR_VECTOR_LOOP_
-#pragma vector aligned
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
 #if LAYOUT > 1 /*AoSoA*/
