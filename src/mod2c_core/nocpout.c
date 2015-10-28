@@ -2049,11 +2049,21 @@ Sprintf(buf, " _ion_%s = %s;\n", SYM(q1)->name, SYM(q1)->name);
 			}else{
 				assert(0);
 			}
-/* first arg is just for the charge, second is pointer to erev, third ard is the style*/
-			Sprintf(buf, "    double *_pe = (&(_ion_%s)) - %d;\n", SYM(qconc)->name, ic);
+            /* first arg is for the charge and memb_list, second and third give 
+             * pointer to erev, fourth arg is the style, seventh needed for figuring 
+             * out _cntml if SoA. Note 2nd argument added as pe because we see errors 
+             * with pointer arithmetic in OpenACC cray compiler
+             */
+			Sprintf(buf, "    double *_pe = (&(_ion_%s));\n", SYM(qconc)->name);
 			Lappendstr(l, buf);
-			Sprintf(buf, "    nrn_wrote_conc(_%s_type, _pe, _style_%s, nrn_ion_global_map, celsius);\n",
-				in, in);
+			Sprintf(buf, "    _Memb_list* _%s_ml;\n", in);
+			Lappendstr(l, buf);
+			Sprintf(buf, "    _%s_ml = _nt->_ml_list[_%s_type];\n", in, in);
+			Lappendstr(l, buf);
+			Sprintf(buf, "    int _tmp_cntml = _%s_ml->_nodecount;\n", in);
+			Lappendstr(l, buf);
+			Sprintf(buf, "    nrn_wrote_conc(_%s_type, _pe, %d, _style_%s, nrn_ion_global_map, celsius, _tmp_cntml);\n",
+				in, ic, in);
 			Lappendstr(l, buf);
 		}
 	}
