@@ -355,7 +355,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n#if LAYOUT >= 1\
 \n#define _STRIDE LAYOUT\
 \n#else\
-\n#define _STRIDE _cntml + _iml\
+\n#define _STRIDE _cntml_padded + _iml\
 \n#endif\
 \n");
 	}else{
@@ -410,10 +410,10 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 
 	if (vectorize) {
 		Lappendstr(defs_list, "\n\
-#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt, v,\n\
-#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,\n\
-#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt, v\n\
-#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v\n\
+#define _threadargscomma_ _iml, _cntml_padded, _p, _ppvar, _thread, _nt, v,\n\
+#define _threadargsprotocomma_ int _iml, int _cntml_padded, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,\n\
+#define _threadargs_ _iml, _cntml_padded, _p, _ppvar, _thread, _nt, v\n\
+#define _threadargsproto_ int _iml, int _cntml_padded, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v\n\
 ");
 	}else{
 		Lappendstr(defs_list, "\n\
@@ -942,6 +942,13 @@ static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {\n");
 		Lappendstr(defs_list, buf);
 	}
 
+	if (diamdec) {
+		ppvar_semantics(ioncount + pointercount, "diam");
+	}
+	if (areadec) {
+		ppvar_semantics(ioncount + pointercount + diamdec, "area");
+	}
+
 	if (point_process) {
 		ioncount = 2;
 	}else{
@@ -1063,7 +1070,7 @@ Sprintf(buf, "\"%s\", %g,\n", s->name, d1);
 		if (!net_receive_) {
 			diag("can't use net_send if there is no NET_RECEIVE block", (char*)0);
 		}
-		sprintf(buf, "\n#define _tqitem &(_nt->_vdata[_ppvar[%d]])\n", tqitem_index);
+		sprintf(buf, "\n#define _tqitem &(_nt->_vdata[_ppvar[%d*_STRIDE]])\n", tqitem_index);
 		Lappendstr(defs_list, buf);
 		if (net_send_delivered_) {
 			insertstr(net_send_delivered_, "  if (_lflag == 1. ) {*(_tqitem) = 0;}\n");
@@ -2060,7 +2067,7 @@ Sprintf(buf, " _ion_%s = %s;\n", SYM(q1)->name, SYM(q1)->name);
 			Lappendstr(l, buf);
 			Sprintf(buf, "    _%s_ml = _nt->_ml_list[_%s_type];\n", in, in);
 			Lappendstr(l, buf);
-			Sprintf(buf, "    int _tmp_cntml = _%s_ml->_nodecount;\n", in);
+			Sprintf(buf, "    int _tmp_cntml = _%s_ml->_nodecount_padded;\n", in);
 			Lappendstr(l, buf);
 			Sprintf(buf, "    nrn_wrote_conc(_%s_type, _pe, %d, _style_%s, nrn_ion_global_map, celsius, _tmp_cntml);\n",
 				in, ic, in);
@@ -2489,10 +2496,11 @@ diag(SYM(q1)->name, " is WRITE but is not a STATE and has no assignment statemen
 
 void out_nt_ml_frag(List* p) {
 		vectorize_substitute(lappendstr(p, "  ThreadDatum* _thread;\n"), "  double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-		Lappendstr(p, "  Node* _nd; double _v; int _iml, _cntml;\n\
-  _cntml = _ml->_nodecount;\n\
+		Lappendstr(p, "  Node* _nd; double _v; int _iml, _cntml_padded, _cntml_actual;\n\
+  _cntml_actual = _ml->_nodecount;\n\
+  _cntml_padded = _ml->_nodecount_padded;\n\
   _thread = _ml->_thread;\n\
-  for (_iml = 0; _iml < _cntml; ++_iml) {\n\
+  for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n\
     _p = _ml->_data[_iml]; _ppvar = _ml->_pdata[_iml];\n\
     _nd = _ml->_nodelist[_iml];\n\
     v = NODEV(_nd);\n\
@@ -2684,7 +2692,8 @@ const char* net_boilerplate() {
    double *_weights = _nt->_weights;\n\
    _args = _weights + _weight_index;\n\
    _ml = _nt->_ml_list[_pnt->_type];\n\
-   _cntml = _ml->_nodecount;\n\
+   _cntml_actual = _ml->_nodecount;\n\
+   _cntml_padded = _ml->_nodecount_padded;\n\
    _iml = _pnt->_i_instance;\n\
 #if LAYOUT == 1 /*AoS*/\n\
    _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n\
@@ -2788,7 +2797,7 @@ void net_receive(qblk, qarg, qp1, qp2, qstmt, qend)
 	net_receive_block_open_brace_ = q;
 	vectorize_substitute(q, "\n\
 {  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt; double v;\n\
-   _Memb_list* _ml; int _cntml; int _iml; double* _args;\n\
+   _Memb_list* _ml; int _cntml_padded, _cntml_actual; int _iml; double* _args;\n\
 ");
 	if (watch_seen_) {
 		insertstr(qstmt, "  int _watch_rm = 0;\n");
@@ -2871,7 +2880,7 @@ void net_init(qinit, qp2)
 	replacstr(qinit, "\nstatic void _net_init(Point_process* _pnt, int _weight_index, double _lflag)");
 	vectorize_substitute(insertstr(qinit->next->next, ""), "\n\
    double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt;\n\
-   _Memb_list* _ml; int _cntml; int _iml; double* _args;\n\
+   _Memb_list* _ml; int _cntml_padded, _cntml_actual; int _iml; double* _args;\n\
 ");
 	vectorize_substitute(insertstr(qinit->next->next->next, ""), net_boilerplate());
 	if (net_init_q1_) {
