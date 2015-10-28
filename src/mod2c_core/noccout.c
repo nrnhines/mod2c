@@ -195,12 +195,13 @@ void c_out(const char* prefix)
 	/* generation of initmodel interface */
 #if VECTORIZE
 	P("\nstatic void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){\n");
-	  P("double _v; int* _ni; int _iml, _cntml;\n");
+	  P("double _v; int* _ni; int _iml, _cntml_padded, _cntml_actual;\n");
 	  P("#if CACHEVEC\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("#endif\n");
-	  P("_cntml = _ml->_nodecount;\n");
-	  P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
+	  P("_cntml_actual = _ml->_nodecount;\n");
+	  P("_cntml_padded = _ml->_nodecount_padded;\n");
+	  P("for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n");
 	  P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
 #else
 	P("\nstatic nrn_init(_prop, _v) Prop *_prop; double _v; {\n");
@@ -242,12 +243,13 @@ void c_out(const char* prefix)
 
     if (brkpnt_exists) {
 	P("\nstatic void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type){\n");
-	  P("int* _ni; double _rhs, _v; int _iml, _cntml;\n");
+	  P("int* _ni; double _rhs, _v; int _iml, _cntml_padded, _cntml_actual;\n");
 	  P("#if CACHEVEC\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("#endif\n");
-	  P("_cntml = _ml->_nodecount;\n");
-	  P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
+	  P("_cntml_actual = _ml->_nodecount;\n");
+	  P("_cntml_padded = _ml->_nodecount_padded;\n");
+	  P("for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n");
 	  P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
 	  ext_vdef();
 	if (currents->next != currents) {
@@ -300,12 +302,13 @@ void c_out(const char* prefix)
 	/* for the classic breakpoint block, nrn_cur computed the conductance, _g,
 	   and now the jacobian calculation merely returns that */
 	P("\nstatic void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type){\n");
-	  P("int* _ni; int _iml, _cntml;\n");
+	  P("int* _ni; int _iml, _cntml_padded, _cntml_actual;\n");
 	  P("#if CACHEVEC\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("#endif\n");
-	  P("_cntml = _ml->_nodecount;\n");
-	  P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
+	  P("_cntml_actual = _ml->_nodecount;\n");
+	  P("_cntml_padded = _ml->_nodecount_padded;\n");
+	  P("for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n");
 	  P(" _p = _ml->_data + _iml*_psize;\n");
 	if (electrode_current) {
 #if CACHEVEC == 0
@@ -337,12 +340,13 @@ void c_out(const char* prefix)
 #endif
 	if (nrnstate || currents->next == currents) {
 #if VECTORIZE
-	  P("double _v = 0.0; int* _ni; int _iml, _cntml;\n");
+	  P("double _v = 0.0; int* _ni; int _iml, _cntml_padded, _cntml_actual;\n");
 	  P("#if CACHEVEC\n");
 	  P("    _ni = _ml->_nodeindices;\n");
 	  P("#endif\n");
-	  P("_cntml = _ml->_nodecount;\n");
-	  P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
+	  P("_cntml_actual = _ml->_nodecount;\n");
+	  P("_cntml_padded = _ml->_nodecount_padded;\n");
+	  P("for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n");
 	  P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
 	  ext_vdef();
 #else
@@ -406,7 +410,8 @@ void c_out(const char* prefix)
 	P("\n_initlists() {\n");
 #endif
 	P(" int _i; static int _first = 1;\n");
-	P(" int _cntml=0;\n");
+	P(" int _cntml_actual=0;\n");
+	P(" int _cntml_padded=0;\n");
 	P(" int _iml=0;\n");
 	P("  if (!_first) return;\n");
 	printlist(initlist);
@@ -576,7 +581,7 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
 	P("double * _vec_v = _nt->_actual_v;\n");
 
 	P("#if LAYOUT == 1 /*AoS*/\n");
-	P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
+	P("for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n");
 	P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
 	P("#endif\n");
 	P("#if LAYOUT == 0 /*SoA*/\n");
@@ -591,7 +596,7 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
         if(fun_type == NRN_CUR_SYN)
 		    P("_PRAGMA_FOR_CUR_SYN_ACC_LOOP_\n");
 	}
-	P("for (_iml = 0; _iml < _cntml; ++_iml) {\n");
+	P("for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n");
 	P("#endif\n");
 	P("#if LAYOUT > 1 /*AoSoA*/\n");
 	P("#error AoSoA not implemented.\n");
@@ -654,9 +659,10 @@ void c_out_vectorize(const char* prefix)
 	/* generation of initmodel interface */
 	P("\nstatic void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){\n");
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("double _v, v; int* _ni; int _iml, _cntml;\n");
+	  P("double _v, v; int* _ni; int _iml, _cntml_padded, _cntml_actual;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
-	  P("_cntml = _ml->_nodecount;\n");
+	  P("_cntml_actual = _ml->_nodecount;\n");
+	  P("_cntml_padded = _ml->_nodecount_padded;\n");
 	  P("_thread = _ml->_thread;\n");
 	/*check_tables();*/
 	  pr_layout_for_p(0, NRN_INIT);
@@ -697,9 +703,10 @@ void c_out_vectorize(const char* prefix)
     if (brkpnt_exists) {
 	P("\nstatic void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("int* _ni; double _rhs, _g, _v, v; int _iml, _cntml;\n");
+	  P("int* _ni; double _rhs, _g, _v, v; int _iml, _cntml_padded, _cntml_actual;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
-	  P("_cntml = _ml->_nodecount;\n");
+	  P("_cntml_actual = _ml->_nodecount;\n");
+	  P("_cntml_padded = _ml->_nodecount_padded;\n");
 	  P("_thread = _ml->_thread;\n");
 	  P("double * _vec_rhs = _nt->_actual_rhs;\n");
 	  P("double * _vec_d = _nt->_actual_d;\n");
@@ -769,7 +776,7 @@ void c_out_vectorize(const char* prefix)
 			P("	_vec_shadow_rhs[_iml] = _rhs;\n\
     _vec_shadow_d[_iml] = _g;\n\
  }\n\
- for (_iml = 0; _iml < _cntml; ++_iml) {\n\
+ for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n\
    int _nd_idx = _ni[_iml];\n\
    _vec_rhs[_nd_idx] -= _vec_shadow_rhs[_iml];\n\
    _vec_d[_nd_idx] += _vec_shadow_d[_iml];\n\
@@ -789,9 +796,10 @@ void c_out_vectorize(const char* prefix)
 	   and now the jacobian calculation merely returns that */
 	P("\nstatic void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("int* _ni; int _iml, _cntml;\n");
+	  P("int* _ni; int _iml, _cntml_padded, _cntml_actual;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
-	  P("_cntml = _ml->_nodecount;\n");
+	  P("_cntml_actual = _ml->_nodecount;\n");
+	  P("_cntml_padded = _ml->_nodecount_padded;\n");
 	  P("_thread = _ml->_thread;\n");
 	  pr_layout_for_p(0, NRN_JACOB);
 	if (electrode_current) {
@@ -822,9 +830,10 @@ void c_out_vectorize(const char* prefix)
 	P("\nstatic void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type) {\n");
 	if (nrnstate || currents->next == currents) {
 	  P("double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-	  P("double v, _v = 0.0; int* _ni; int _iml, _cntml;\n");
+	  P("double v, _v = 0.0; int* _ni; int _iml, _cntml_padded, _cntml_actual;\n");
 	  P("    _ni = _ml->_nodeindices;\n");
-	  P("_cntml = _ml->_nodecount;\n");
+	  P("_cntml_actual = _ml->_nodecount;\n");
+	  P("_cntml_padded = _ml->_nodecount_padded;\n");
 	  P("_thread = _ml->_thread;\n");
 	  pr_layout_for_p(1, NRN_STATE);
 	  ext_vdef();
@@ -852,7 +861,8 @@ void c_out_vectorize(const char* prefix)
 	P("\nstatic void _initlists(){\n");
 	P(" double _x; double* _p = &_x;\n");
 	P(" int _i; static int _first = 1;\n");
-	P(" int _cntml=0;\n");
+	P(" int _cntml_actual=0;\n");
+	P(" int _cntml_padded=0;\n");
 	P(" int _iml=0;\n");
 	P("  if (!_first) return;\n");
 	printlist(initlist);
