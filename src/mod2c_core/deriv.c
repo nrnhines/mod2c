@@ -425,7 +425,7 @@ void massagederiv(q1, q2, q3, q4, sensused)
 	Lappendsym(massage_list_, SYM(q2));
 	
 	/* all this junk is still in the intoken list */
-	Sprintf(buf, "static int %s(_threadargsproto_);\n", SYM(q2)->name);
+	Sprintf(buf, "static inline int %s(_threadargsproto_);\n", SYM(q2)->name);
 	Linsertstr(procfunc, buf);
 	replacstr(q1, "\nstatic int"); q = insertstr(q3, "() {_reset=0;\n");
 	derfun = SYM(q2);

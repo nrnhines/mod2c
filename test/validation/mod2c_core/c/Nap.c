@@ -221,7 +221,7 @@ static int trates(double);
 static int _ode_spec1(_threadargsproto_);
 static int _ode_matsol1(_threadargsproto_);
  static int _slist1[1], _dlist1[1];
- static int states(_threadargsproto_);
+ static inline int states(_threadargsproto_);
  
 /*CVODE*/
  static int _ode_spec1 () {_reset=0;

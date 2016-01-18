@@ -287,7 +287,7 @@ static int _ode_spec1(_threadargsproto_);
 static int _ode_matsol1(_threadargsproto_);
  static int _slist2[2];
   static int _slist1[2], _dlist1[2];
- static int states(_threadargsproto_);
+ static inline int states(_threadargsproto_);
  
 /*CVODE*/
  static int _ode_spec1 (_threadargsproto_) {int _reset = 0; {
