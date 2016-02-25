@@ -345,7 +345,7 @@ static int _ode_spec1(_threadargsproto_);
 static int _ode_matsol1(_threadargsproto_);
  static void _n_trates(_threadargsprotocomma_ double _lv);
  static int _slist1[1], _dlist1[1];
- static int states(_threadargsproto_);
+ static inline int states(_threadargsproto_);
  
 /*VERBATIM*/
 #include "nrnran123.h"
