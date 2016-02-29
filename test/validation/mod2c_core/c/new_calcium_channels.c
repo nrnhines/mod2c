@@ -351,7 +351,7 @@ static int settables(_threadargsprotocomma_ double);
 static int _ode_spec1(_threadargsproto_);
 static int _ode_matsol1(_threadargsproto_);
  static int _slist1[6], _dlist1[6];
- static int states(_threadargsproto_);
+ static inline int states(_threadargsproto_);
  
 /*CVODE*/
  static int _ode_spec1 (_threadargsproto_) {int _reset = 0; {
