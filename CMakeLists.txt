@@ -3,48 +3,42 @@ set(CMAKE_BUILD_TYPE Release)
 
 project(mod2c)
 
+set(MOD2C_DESCRIPTION "MOD2C converter")
+
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 1)
 set(VERSION_PATCH 1)
+set(VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
-set(MOD2C_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
+option(UNIT_TESTS "Enable unit tests compilation and execution" FALSE)
+option(FUNCTIONAL_TESTS "Enable functional tests compilation and execution" FALSE)
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake ${CMAKE_SOURCE_DIR}/CMake/common)
-include(GitExternal)
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMake
+      ${PROJECT_SOURCE_DIR}/CMake/config)
 
-set(MOD2C_DESCRIPTION "MOD2C converter")
-include(Common)
+include(DefineInstallationPaths)
+include(ReleaseDebugAutoFlags)
 
-if(BLUEGENE)
-  set(CMAKE_C_COMPILER "xlc")
-  set(CMAKE_CXX_COMPILER "xlc++")
-endif()
+include(FindPkgConfig)
+include(CTest)
 
 # treat white-space separated string as a list
-macro(wslist listcmd listvar)
-    string(REGEX REPLACE "[ 	]+" ";" ${listvar} "${${listvar}}")
-    list(${listcmd} ${listvar} ${ARGN})
-    string(REPLACE ";" " " ${listvar} "${${listvar}}")
-endmacro()
+#macro(wslist listcmd listvar)
+#    string(REGEX REPLACE "[ 	]+" ";" ${listvar} "${${listvar}}")
+#    list(${listcmd} ${listvar} ${ARGN})
+#    string(REPLACE ";" " " ${listvar} "${${listvar}}")
+#endmacro()
 
 # legacy code; clean up is for the future
-wslist(REMOVE_ITEM CMAKE_C_FLAGS "-Werror")
-wslist(REMOVE_ITEM CMAKE_CXX_FLAGS "-Werror")
+#wslist(REMOVE_ITEM CMAKE_C_FLAGS "-Werror")
+#wslist(REMOVE_ITEM CMAKE_CXX_FLAGS "-Werror")
 
 find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
+
 
 add_subdirectory(src/mod2c)
 add_subdirectory(src/mod2c_core)
 add_subdirectory(test/validation)
 
 install(FILES share/nrnunits.lib DESTINATION share)
-
-set(MOD2C_CONFIG_VERSION_IN "mod2cConfigVersion.cmake.in")
-include(CPackConfig)
-
-#Documentation
-set(GIT_DOCUMENTATION_REPO BBPDocumentation)
-set(COMMON_ORGANIZATION_NAME BBP)
-set(COMMON_PROJECT_DOMAIN ch.epfl.bluebrain)
-include(DoxygenRule)
