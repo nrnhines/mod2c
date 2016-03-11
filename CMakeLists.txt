@@ -22,20 +22,8 @@ include(ReleaseDebugAutoFlags)
 include(FindPkgConfig)
 include(CTest)
 
-# treat white-space separated string as a list
-#macro(wslist listcmd listvar)
-#    string(REGEX REPLACE "[ 	]+" ";" ${listvar} "${${listvar}}")
-#    list(${listcmd} ${listvar} ${ARGN})
-#    string(REPLACE ";" " " ${listvar} "${${listvar}}")
-#endmacro()
-
-# legacy code; clean up is for the future
-#wslist(REMOVE_ITEM CMAKE_C_FLAGS "-Werror")
-#wslist(REMOVE_ITEM CMAKE_CXX_FLAGS "-Werror")
-
 find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
-
 
 add_subdirectory(src/mod2c)
 add_subdirectory(src/mod2c_core)
