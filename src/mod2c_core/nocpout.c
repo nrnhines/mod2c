@@ -2667,7 +2667,7 @@ void cvode_rw_cur(b) char* b; {
 		q = q->next;
 		ITERATE (q1, LST(q)) {
 			type = SYM(q1)->nrntype;
-			if ((type & NRNCURIN) && (type && NRNCUROUT)) {
+			if ((type & NRNCURIN) && (type & NRNCUROUT)) {
 				if (!cvode_not_allowed && cvode_emit) {
 					if (vectorize) {
 sprintf(b, "if (_nt->_vcv) { _ode_spec%d(_threadargs_); }\n", cvode_num_);
