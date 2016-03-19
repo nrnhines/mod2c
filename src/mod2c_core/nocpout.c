@@ -2726,7 +2726,7 @@ void emit_net_receive_buffering_code() {
 \n  int _i, _j, _k;\
 \n  double _nrt;\
 \n  int stream_id = _nt->stream_id;\
-\n  Point_process* _pnt = _nt->pntprocs + _nrb->_pnt_offset;\
+\n  Point_process* _pnt = _nt->pntprocs;\
 \n  int _pnt_length = _nt->n_pntproc - _nrb->_pnt_offset;\
 \n  _PRAGMA_FOR_NETRECV_ACC_LOOP_ \
 \n  for (_i = 0; _i < _nrb->_cnt; ++_i) {\
@@ -2752,7 +2752,7 @@ void emit_net_receive_buffering_code() {
 \n    _nrb->_nrb_t = (double*)erealloc(_nrb->_nrb_t, _nrb->_size*sizeof(double));\
 \n    _nrb->reallocated = 1;\
 \n  }\
-\n  _nrb->_pnt_index[_nrb->_cnt] = _pnt->_i_instance;\
+\n  _nrb->_pnt_index[_nrb->_cnt] = _pnt - _nt->pntprocs;\
 \n  _nrb->_weight_index[_nrb->_cnt] = _weight_index;\
 \n  _nrb->_nrb_t[_nrb->_cnt] = _nt->_t;\
 \n  ++_nrb->_cnt;\
