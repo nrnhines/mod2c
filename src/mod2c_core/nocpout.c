@@ -346,6 +346,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
          * except that sync clause absent because we saw issue only in CaDynamics_E2 */
 		Lappendstr(defs_list, "\
 \n#if defined(_OPENACC)\
+\n#include <openacc.h>\
 \n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1]) if(_nt->compute_gpu)\")\
 \n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) \")\
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) \")\
@@ -405,19 +406,19 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 #if 1
 	/* for easier profiling, give distinct names to otherwise reused static names */
 	sprintf(buf, "\n\
-#define nrn_init _nrn_init_%s\n\
-#define nrn_cur _nrn_cur_%s\n\
-#define _nrn_current _nrn_current_%s\n\
-#define nrn_jacob _nrn_jacob_%s\n\
-#define nrn_state _nrn_state_%s\n\
-#define _net_receive _net_receive_%s\
+#define nrn_init _nrn_init%s\n\
+#define nrn_cur _nrn_cur%s\n\
+#define _nrn_current _nrn_current%s\n\
+#define nrn_jacob _nrn_jacob%s\n\
+#define nrn_state _nrn_state%s\n\
+#define _net_receive _net_receive%s\
 ", suffix, suffix, suffix, suffix, suffix, suffix);
 	Lappendstr(defs_list, buf);
 
 	if (net_receive_buffering_) {
 		sprintf(buf, "\
 \n#if NET_RECEIVE_BUFFERING\
-\n#define _net_buf_receive _net_buf_receive_%s\
+\n#define _net_buf_receive _net_buf_receive%s\
 \nstatic void _net_buf_receive(_NrnThread*);\
 \n#endif\
 \n", suffix);
@@ -428,7 +429,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 		Symbol* s = SYM(q);
 		/* note that with GLOBFUNCT, FUNCT will be redefined anyway */
 		if (s->type == NAME && s->subtype & (PROCED | DERF | KINF)) {
-			sprintf(buf, "\n#define %s %s_%s", s->name, s->name, suffix);
+			sprintf(buf, "\n#define %s %s%s", s->name, s->name, suffix);
 			Lappendstr(defs_list, buf);
 		}
 	}
