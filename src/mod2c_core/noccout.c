@@ -638,13 +638,21 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
     }
 }
 
+static void print_cuda_launcher_call(char *name) {
+    P("\n#if defined(ENABLE_CUDA_INTERFACE) && defined(_OPENACC)\n");
+    P("  _NrnThread* d_nt = acc_deviceptr(_nt);\n");
+    P("  _Memb_list* d_ml = acc_deviceptr(_ml);\n");
+    Fprintf(fcout, "  nrn_%s_launcher(d_nt, d_ml, _type, _cntml_actual);\n", name);
+    P("  return;\n");
+    P("#endif\n\n");
+}
 
 void c_out_vectorize(const char* prefix)
 {
 	Item *q;
 	extern int point_process;
 	(void)prefix; /* not used */
-	
+
 	/* things which must go first and most declarations */
 	P("/* VECTORIZED */\n");
 	P("#include <stdio.h>\n#include <stdlib.h>\n#include <math.h>\n#include \"coreneuron/mech/cfile/scoplib.h\"\n");
@@ -734,6 +742,13 @@ void c_out_vectorize(const char* prefix)
 	P("\n} return _current;\n}\n");
      }
 
+    /* cuda interface */
+    P("\n#if defined(ENABLE_CUDA_INTERFACE) && defined(_OPENACC)\n");
+    P("  void nrn_state_launcher(_NrnThread*, _Memb_list*, int, int);\n");
+    P("  void nrn_jacob_launcher(_NrnThread*, _Memb_list*, int, int);\n");
+    P("  void nrn_cur_launcher(_NrnThread*, _Memb_list*, int, int);\n");
+    P("#endif\n\n");
+
 	/* For the classic BREAKPOINT block, the neuron current also has to compute the dcurrent/dv as well
 	   as make sure all currents accumulated properly (currents list) */
 
@@ -751,6 +766,9 @@ void c_out_vectorize(const char* prefix)
 	    P("double * _vec_shadow_rhs = _nt->_shadow_rhs;\n");
 	    P("double * _vec_shadow_d = _nt->_shadow_d;\n");
       }
+
+      print_cuda_launcher_call("cur");
+
       if(point_process)
 	    pr_layout_for_p(1, NRN_CUR_SYN);
       else
@@ -862,6 +880,7 @@ void c_out_vectorize(const char* prefix)
 	  P("_cntml_actual = _ml->_nodecount;\n");
 	  P("_cntml_padded = _ml->_nodecount_padded;\n");
 	  P("_thread = _ml->_thread;\n");
+      print_cuda_launcher_call("jacob");
 	  pr_layout_for_p(0, NRN_JACOB);
 	if (electrode_current) {
 #if CACHEVEC == 0
@@ -896,6 +915,8 @@ void c_out_vectorize(const char* prefix)
 	  P("_cntml_actual = _ml->_nodecount;\n");
 	  P("_cntml_padded = _ml->_nodecount_padded;\n");
 	  P("_thread = _ml->_thread;\n");
+
+      print_cuda_launcher_call("state");
 	  pr_layout_for_p(1, NRN_STATE);
 	  ext_vdef();
 	  P(" v=_v;\n{\n");
