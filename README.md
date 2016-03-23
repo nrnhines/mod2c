@@ -28,6 +28,9 @@ like BG-Q, Cray, Intel MIC etc.
 ## License
 * See LICENSE.txt
 * See [NEURON](https://www.neuron.yale.edu/neuron/)
+* The mechanisms and test datasets appearing in the CoreNeuron repository are subject to separate licenses.
+  More information is available on the NMC portal website [NMC portal](https://bbp.epfl.ch/nmc-portal/copyright),
+  the specific licenses are described in the ME-type model packages downloadable from that website.
 
 ## Contributors
 To facilitate the future distributions of the software the Blue Brain Project wishes to remain the sole
