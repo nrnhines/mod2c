@@ -406,13 +406,16 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 #if 1
 	/* for easier profiling, give distinct names to otherwise reused static names */
 	sprintf(buf, "\n\
-#define nrn_init _nrn_init%s\n\
-#define nrn_cur _nrn_cur%s\n\
-#define _nrn_current _nrn_current%s\n\
-#define nrn_jacob _nrn_jacob%s\n\
-#define nrn_state _nrn_state%s\n\
-#define _net_receive _net_receive%s\
-", suffix, suffix, suffix, suffix, suffix, suffix);
+#define nrn_init _nrn_init_%s\n\
+#define nrn_cur _nrn_cur_%s\n\
+#define _nrn_current _nrn_current_%s\n\
+#define nrn_jacob _nrn_jacob_%s\n\
+#define nrn_state _nrn_state_%s\n\
+#define _net_receive _net_receive_%s\n\
+#define nrn_state_launcher nrn_state%s_launcher\n\
+#define nrn_cur_launcher nrn_cur%s_launcher\n\
+#define nrn_jacob_launcher nrn_jacob%s_launcher\
+", suffix, suffix, suffix, suffix, suffix, suffix, suffix, suffix, suffix);
 	Lappendstr(defs_list, buf);
 
 	if (net_receive_buffering_) {
