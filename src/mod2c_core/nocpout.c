@@ -346,6 +346,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
          * except that sync clause absent because we saw issue only in CaDynamics_E2 */
 		Lappendstr(defs_list, "\
 \n#if defined(_OPENACC)\
+\n#include <openacc.h>\
 \n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1]) if(_nt->compute_gpu)\")\
 \n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) \")\
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) \")\
@@ -411,9 +412,9 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 #define nrn_jacob _nrn_jacob_%s\n\
 #define nrn_state _nrn_state_%s\n\
 #define _net_receive _net_receive_%s\n\
-#define nrn_state_launcher nrn_state_launcher_%s\n\
-#define nrn_cur_launcher nrn_cur_launcher_%s\n\
-#define nrn_jacob_launcher nrn_jacob_launcher_%s\
+#define nrn_state_launcher nrn_state%s_launcher\n\
+#define nrn_cur_launcher nrn_cur%s_launcher\n\
+#define nrn_jacob_launcher nrn_jacob%s_launcher\
 ", suffix, suffix, suffix, suffix, suffix, suffix, suffix, suffix, suffix);
 	Lappendstr(defs_list, buf);
 
