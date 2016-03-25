@@ -706,7 +706,9 @@ void c_out_vectorize(const char* prefix)
 
      /* @todo: will be done once anyway but it seems like this is bein copied
       * in many other places. See CNEUR-134 */
-     P("\n #pragma acc declare present_or_copyin (celsius)\n");
+      /* added data region in main fuction, need to verify that values are 
+       * correctly being used */
+     //P("\n #pragma acc declare present_or_copyin (celsius)\n");
 
 	 pr_layout_for_p(1, NRN_INIT);
 
