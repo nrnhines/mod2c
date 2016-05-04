@@ -1082,6 +1082,7 @@ sprintf(buf," %s = %s + (1. - exp(dt*(%s)))*(%s - %s)",
 		lappendstr(procfunc, "static int");
 		{ Item* qq = procfunc->prev;
 		copyitems(q1, q2, procfunc->prev);
+		insertstr(qq, "\n_PRAGMA_FOR_ACC_ROUTINE_SEQ_\n");
 		/* more or less redundant with massagederiv */
 		vectorize_substitute(qq->next->next, "(_threadargsproto_) {");
 		vectorize_scan_for_func(qq->next->next, procfunc);

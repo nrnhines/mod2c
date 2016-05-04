@@ -759,18 +759,6 @@ Sprintf(buf, "\"%s\", %g, %g,\n", s->name, d1, d2);
 	Lappendstr(defs_list, "\n#endif /*BBCORE*/\n");
 #endif
 	
-#if PG_ACC_BUGS
-	Lappendstr(defs_list, "\n#if defined(PG_ACC_BUGS)\n#define NRNSTATGLOB /**/");
- 	SYMLISTITER {
-		s = SYM(q);
-		if (s->nrntype & (NRNSTATIC)) {
-Sprintf(buf, "\n#define %s %s%s", s->name, s->name, suffix);
-			Lappendstr(defs_list, buf);
-		}
-	}
-	Lappendstr(defs_list, "\n#else\n#define NRNSTATGLOB static\n#endif /*defined(PG_ACC_BUGS)*/\n");
-#endif /*PG_ACC_BUGS*/
-
  	SYMLISTITER {
 		s = SYM(q);
 		if (s->nrntype & (NRNSTATIC)) {
@@ -781,17 +769,9 @@ diag("No statics allowed for thread safe models:", s->name);
 #endif
 			decode_ustr(s, &d1, &d2, buf);
 			if (s->subtype & ARRAY) {
-#if PG_ACC_BUGS
-				Sprintf(buf, "NRNSTATGLOB double %s[%d];\n", s->name, s->araydim);
-#else
 				Sprintf(buf, "static double %s[%d];\n", s->name, s->araydim);
-#endif
 			}else{
-#if PG_ACC_BUGS
-				Sprintf(buf, "NRNSTATGLOB double %s = %g;\n", s->name, d1);
-#else
 				Sprintf(buf, "static double %s = %g;\n", s->name, d1);
-#endif
 			}
 			Lappendstr(defs_list, buf);
 		}
@@ -2829,6 +2809,7 @@ void emit_net_receive_buffering_code() {
 	insertstr(q, buf);
 
 	sprintf(buf, "\
+\n_PRAGMA_FOR_ACC_ROUTINE_SEQ_\
 \nstatic void _net_receive_kernel(_NrnThread* _nt, double _nrb_t, Point_process* _pnt, int _weight_index, double _lflag)\
 \n#else\
 \n");
