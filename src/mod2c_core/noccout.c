@@ -639,7 +639,7 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
 }
 
 static void print_cuda_launcher_call(char *name) {
-    P("\n#if defined(ENABLE_CUDA_INTERFACE) && defined(_OPENACC)\n");
+    P("\n#if defined(ENABLE_CUDA_INTERFACE) && defined(_OPENACC) && !defined(DISABLE_OPENACC)\n");
     P("  _NrnThread* d_nt = acc_deviceptr(_nt);\n");
     P("  _Memb_list* d_ml = acc_deviceptr(_ml);\n");
     Fprintf(fcout, "  nrn_%s_launcher(d_nt, d_ml, _type, _cntml_actual);\n", name);
