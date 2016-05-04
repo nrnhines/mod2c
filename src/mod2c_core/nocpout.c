@@ -347,12 +347,14 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 		Lappendstr(defs_list, "\
 \n#if defined(_OPENACC)\
 \n#include <openacc.h>\
+\n#define _PRAGMA_FOR_ACC_ROUTINE_SEQ_ _Pragma(\"acc routine seq\")\
 \n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1]) if(_nt->compute_gpu)\")\
 \n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_shadow_rhs[0:_nt->shadow_rhs_cnt], _vec_shadow_d[0:_nt->shadow_rhs_cnt], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma(\"acc parallel loop present(_pnt[0:_pnt_length], _nrb[0:1], nrn_threads[0:nrn_nthread]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#else\
+\n#define _PRAGMA_FOR_ACC_ROUTINE_SEQ_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"\")\
@@ -757,6 +759,18 @@ Sprintf(buf, "\"%s\", %g, %g,\n", s->name, d1, d2);
 	Lappendstr(defs_list, "\n#endif /*BBCORE*/\n");
 #endif
 	
+#if PG_ACC_BUGS
+	Lappendstr(defs_list, "\n#if defined(PG_ACC_BUGS)\n#define NRNSTATGLOB /**/");
+ 	SYMLISTITER {
+		s = SYM(q);
+		if (s->nrntype & (NRNSTATIC)) {
+Sprintf(buf, "\n#define %s %s%s", s->name, s->name, suffix);
+			Lappendstr(defs_list, buf);
+		}
+	}
+	Lappendstr(defs_list, "\n#else\n#define NRNSTATGLOB static\n#endif /*defined(PG_ACC_BUGS)*/\n");
+#endif /*PG_ACC_BUGS*/
+
  	SYMLISTITER {
 		s = SYM(q);
 		if (s->nrntype & (NRNSTATIC)) {
@@ -767,9 +781,17 @@ diag("No statics allowed for thread safe models:", s->name);
 #endif
 			decode_ustr(s, &d1, &d2, buf);
 			if (s->subtype & ARRAY) {
+#if PG_ACC_BUGS
+				Sprintf(buf, "NRNSTATGLOB double %s[%d];\n", s->name, s->araydim);
+#else
 				Sprintf(buf, "static double %s[%d];\n", s->name, s->araydim);
+#endif
 			}else{
+#if PG_ACC_BUGS
+				Sprintf(buf, "NRNSTATGLOB double %s = %g;\n", s->name, d1);
+#else
 				Sprintf(buf, "static double %s = %g;\n", s->name, d1);
+#endif
 			}
 			Lappendstr(defs_list, buf);
 		}
@@ -2715,11 +2737,26 @@ sprintf(b, "if (_nt->_vcv) { _ode_spec%d(); }\n", cvode_num_);
 }
 #endif
 
-const char* net_boilerplate() {
+const char* net_boilerplate(int flag) {
+	char b[1000];
+	b[0] = '\0';
+	
 	sprintf(buf, "\n\
-   _thread = (ThreadDatum*)0; \n\
+   _NrnThread* _nt;\n\
    int _tid = _pnt->_tid; \n\
    _nt = nrn_threads + _tid;\n\
+");
+
+#if PG_ACC_BUGS
+	if (flag == 1) {
+		sprintf(b, "\n#if !defined(NET_RECEIVE_BUFFERING) || !NET_RECEIVE_BUFFERING%s#endif\n", buf);
+	}
+#else
+	sprintf(b, "%s", buf);
+#endif
+
+	sprintf(buf, "%s\
+   _thread = (ThreadDatum*)0; \n\
    double *_weights = _nt->_weights;\n\
    _args = _weights + _weight_index;\n\
    _ml = _nt->_ml_list[_pnt->_type];\n\
@@ -2735,7 +2772,7 @@ const char* net_boilerplate() {
 #if LAYOUT > 1 /*AoSoA*/\n\
 #error AoSoA not implemented.\n\
 #endif\n\
-");
+", b);
 	return buf;
 }
 
@@ -2748,7 +2785,7 @@ void emit_net_receive_buffering_code() {
 	sprintf(buf, "\
 \n#undef t\
 \n#define t _nrb_t\
-\nstatic void _net_receive_kernel(double, Point_process*, int _weight_index, double _flag);\
+\nstatic void _net_receive_kernel(_NrnThread*, double, Point_process*, int _weight_index, double _flag);\
 \nstatic void _net_buf_receive(_NrnThread* _nt) {\
 \n  if (!_nt->_ml_list) { return; }\
 \n  _Memb_list* _ml = _nt->_ml_list[_mechtype];\
@@ -2764,7 +2801,7 @@ void emit_net_receive_buffering_code() {
 \n    _j = _nrb->_pnt_index[_i];\
 \n    _k = _nrb->_weight_index[_i];\
 \n    _nrt = _nrb->_nrb_t[_i];\
-\n    _net_receive_kernel(_nrt, _pnt + _j, _k, 0.0);\
+\n    _net_receive_kernel(_nt, _nrt, _pnt + _j, _k, 0.0);\
 \n  }\
 \n  _nrb->_cnt = 0;\
 \n  /*printf(\"_net_buf_receive_%s  %%d\\n\", _nt->_id);*/\
@@ -2792,7 +2829,7 @@ void emit_net_receive_buffering_code() {
 	insertstr(q, buf);
 
 	sprintf(buf, "\
-\nstatic void _net_receive_kernel(double _nrb_t, Point_process* _pnt, int _weight_index, double _lflag)\
+\nstatic void _net_receive_kernel(_NrnThread* _nt, double _nrb_t, Point_process* _pnt, int _weight_index, double _lflag)\
 \n#else\
 \n");
 	insertstr(q, buf);
@@ -2834,13 +2871,14 @@ void net_receive(qblk, qarg, qp1, qp2, qstmt, qend)
 	q = insertstr(qstmt, "\n{");
 	net_receive_block_open_brace_ = q;
 	vectorize_substitute(q, "\n\
-{  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt; double v;\n\
+{  double* _p; Datum* _ppvar; ThreadDatum* _thread; double v;\n\
    _Memb_list* _ml; int _cntml_padded, _cntml_actual; int _iml; double* _args;\n\
 ");
+
 	if (watch_seen_) {
 		insertstr(qstmt, "  int _watch_rm = 0;\n");
 	}
-	q = insertstr(qstmt, net_boilerplate());
+	q = insertstr(qstmt, net_boilerplate(1));
 	if (debugging_) {
 	    if (1) {
 		insertstr(qstmt, " #if !defined(_OPENACC) \n assert(_tsav <= t); \n #endif \n _tsav = t;");
@@ -2924,10 +2962,10 @@ void net_init(qinit, qp2)
 	/* qinit=INITIAL { stmtlist qp2=} */
 	replacstr(qinit, "\nstatic void _net_init(Point_process* _pnt, int _weight_index, double _lflag)");
 	vectorize_substitute(insertstr(qinit->next->next, ""), "\n\
-   double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt;\n\
+   double* _p; Datum* _ppvar; ThreadDatum* _thread; \n\
    _Memb_list* _ml; int _cntml_padded, _cntml_actual; int _iml; double* _args;\n\
 ");
-	vectorize_substitute(insertstr(qinit->next->next->next, ""), net_boilerplate());
+	vectorize_substitute(insertstr(qinit->next->next->next, ""), net_boilerplate(0));
 	if (net_init_q1_) {
 		diag("NET_RECEIVE block can contain only one INITIAL block", (char*)0);
 	}

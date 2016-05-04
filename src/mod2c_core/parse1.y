@@ -856,6 +856,7 @@ funcblk: FUNCTION1 NAME '(' arglist ')' units
 		Sprintf(buf, "\nreturn _l%s;\n", s->name);
 		Insertstr($9, buf);
 		movelist($1, $9, procfunc);
+		Insertstr($1, "\n_PRAGMA_FOR_ACC_ROUTINE_SEQ_");
 		if (SYM($2)->subtype & FUNCT) {
 			diag(SYM($2)->name, " declared as FUNCTION twice");
 		}
@@ -886,6 +887,7 @@ procedblk: PROCEDURE NAME '(' arglist ')' units stmtlist '}'
 		replacstr($1, "\nstatic int "); defarg($3, $5);
 		Insertstr($8, " return 0;");
 		movelist($1, $8, procfunc);
+		Insertstr($1, "\n_PRAGMA_FOR_ACC_ROUTINE_SEQ_");
 		if (SYM($2)->subtype & PROCED) {
 			diag(SYM($2)->name, " declared as PROCEDURE twice");
 		}
