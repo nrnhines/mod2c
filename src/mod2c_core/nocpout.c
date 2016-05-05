@@ -518,6 +518,11 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 				Sprintf(buf, "extern double %s;\n", s->name);
 			}
 			Lappendstr(defs_list, buf);
+            /* temp fix for PGI compiler where extern variable need copyin definition */
+			if (strcmp(s->name, "celsius") == 0) {
+				Sprintf(buf, "#if defined(PG_ACC_BUGS)\n#pragma acc declare copyin(celsius)\n#endif\n");
+			    Lappendstr(defs_list, buf);
+            }
 		}
 	}
 	

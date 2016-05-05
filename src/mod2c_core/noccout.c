@@ -710,8 +710,12 @@ void c_out_vectorize(const char* prefix)
      /* @todo: will be done once anyway but it seems like this is bein copied
       * in many other places. See CNEUR-134 */
       /* added data region in main fuction, need to verify that values are 
-       * correctly being used */
-     //P("\n #pragma acc declare present_or_copyin (celsius)\n");
+       * correctly being used.
+       * While testing with PGI compiler, we have seen incorrect spike if we
+       * don't update celsius, not sure the reason. */
+        P("\n#if defined(PG_ACC_BUGS)\n");
+        P("#pragma acc update device (celsius)\n");
+        P("#endif\n");
 
 	 pr_layout_for_p(1, NRN_INIT);
 
