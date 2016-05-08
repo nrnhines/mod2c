@@ -1125,7 +1125,7 @@ Sprintf(buf, "\"%s\", %g,\n", s->name, d1);
 			Lappendstr(defs_list, "extern int _nrn_netcon_args(void*, double***);\n");
 		}
 		if (net_init_q1_) {
-			Lappendstr(defs_list, "static void _net_init(Point_process*, int, double);\n");
+			Lappendstr(defs_list, "static void _net_init(_NrnThread*, Point_process*, int, double);\n");
 		}
 	}
 	if (vectorize && thread_mem_init_list->next != thread_mem_init_list) {
@@ -2740,6 +2740,8 @@ const char* net_boilerplate(int flag) {
 #if PG_ACC_BUGS
 	if (flag == 1) {
 		sprintf(b, "\n#if !defined(NET_RECEIVE_BUFFERING) || !NET_RECEIVE_BUFFERING%s#endif\n", buf);
+	}else{
+		sprintf(buf,"");
 	}
 #else
 	sprintf(b, "%s", buf);
@@ -2951,7 +2953,7 @@ void net_init(qinit, qp2)
 	Item* qinit, *qp2;
 {
 	/* qinit=INITIAL { stmtlist qp2=} */
-	replacstr(qinit, "\nstatic void _net_init(Point_process* _pnt, int _weight_index, double _lflag)");
+	replacstr(qinit, "\nstatic void _net_init(_NrnThread* _nt, Point_process* _pnt, int _weight_index, double _lflag)");
 	vectorize_substitute(insertstr(qinit->next->next, ""), "\n\
    double* _p; Datum* _ppvar; ThreadDatum* _thread; \n\
    _Memb_list* _ml; int _cntml_padded, _cntml_actual; int _iml; double* _args;\n\
