@@ -2741,7 +2741,7 @@ const char* net_boilerplate(int flag) {
 	if (flag == 1) {
 		sprintf(b, "\n#if !defined(NET_RECEIVE_BUFFERING) || !NET_RECEIVE_BUFFERING%s#endif\n", buf);
 	}else{
-		sprintf(buf,"");
+		buf[0] = '\0';
 	}
 #else
 	sprintf(b, "%s", buf);
