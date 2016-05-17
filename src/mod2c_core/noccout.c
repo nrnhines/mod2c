@@ -683,7 +683,6 @@ void c_out_vectorize(const char* prefix)
 
 	/* Initialization function must always be present */
 
-	P("\n_PRAGMA_FOR_ACC_ROUTINE_SEQ_");
 	P("\nstatic void initmodel(_threadargsproto_) {\n  int _i; double _save;");
 	P("{\n");
 #if !PG_ACC_BUGS
@@ -739,7 +738,6 @@ void c_out_vectorize(const char* prefix)
 
 	/* standard modl EQUATION without solve computes current */
     if (!conductance_) {
-	P("\n_PRAGMA_FOR_ACC_ROUTINE_SEQ_");
 	P("\nstatic double _nrn_current(_threadargsproto_, double _v){double _current=0.;v=_v;");
 #if CVODE
 	if (cvode_nrn_current_solve_) {
