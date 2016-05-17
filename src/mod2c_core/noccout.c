@@ -685,9 +685,7 @@ void c_out_vectorize(const char* prefix)
 
 	P("\nstatic void initmodel(_threadargsproto_) {\n  int _i; double _save;");
 	P("{\n");
-#if !PG_ACC_BUGS
 	initstates();
-#endif
 	printlist(initfunc);
 	if (match_bound) {
 		assert(!vectorize);
@@ -726,11 +724,6 @@ void c_out_vectorize(const char* prefix)
 	if (!artificial_cell) {ext_vdef();}
 	if (!artificial_cell) {P(" v = _v;\n");}
 	printlist(get_ion_variables(1));
-#if PG_ACC_BUGS
-	P(" {int _i;\n");
-	initstates();
-	P(" }\n");
-#endif
 	P(" initmodel(_threadargs_);\n");
 	printlist(set_ion_variables(2));
 	P("}\n");

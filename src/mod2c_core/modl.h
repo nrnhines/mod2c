@@ -67,10 +67,6 @@
  special structures for Reaction, Rlist, etc.
  */
 
-#ifndef PG_ACC_BUGS
-#define PG_ACC_BUGS 1
-#endif
-
 /* For char buffers that might be called on to hold long path names */
 /* Note that paths can exceed MAX_PATH from <limits.h> on some systems */
 #define NRN_BUFSIZE 8192
