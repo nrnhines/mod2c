@@ -711,7 +711,7 @@ void c_out_vectorize(const char* prefix)
        * While testing with PGI compiler, we have seen incorrect spike if we
        * don't update celsius, not sure the reason. */
         P("\n#if defined(PG_ACC_BUGS)\n");
-        P("#pragma acc update device (celsius)\n");
+        P("#pragma acc update device (celsius) if(_nt->compute_gpu)\n");
         P("#endif\n");
 
 	 pr_layout_for_p(1, NRN_INIT);
