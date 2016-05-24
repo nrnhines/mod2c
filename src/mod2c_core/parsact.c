@@ -1064,6 +1064,29 @@ void hocfunc(n, qpar1, qpar2) /*interface between modl and hoc for proc and func
 	hocfunchack(n, qpar1, qpar2, 0);
 }
 
+void acc_net_add(Item* qname, Item* qpar1, Item* qexpr, Item* qpar2, const char* xarg1, const char* xarg2) {
+  Item *q;
+  if (artificial_cell) { return; }
+  sprintf(buf, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n    _net_send_buffering(_ml->_net_send_buffer, %s\
+", xarg1);
+  Insertstr(qname, buf);
+  for (q = qpar1->next; q != qpar2; q = q->next) {
+    if (q->itemtype == SYMBOL) {
+	    insertsym(qname, SYM(q));
+    }else if (q->itemtype == STRING) {
+      insertstr(qname, STR(q));
+    }else{
+      diag("acc_net_add failed because item neither STRING nor SYMBOL");
+    }
+  }
+  sprintf(buf, "%s);\n#else\n", xarg2);
+  Insertstr(qname, buf);
+  Insertstr(qpar2->next, "\n#endif\n");
+}
+
+
 #if VECTORIZE
 /* ARGSUSED */
 void vectorize_use_func(qname, qpar1, qexpr, qpar2, blocktype)
@@ -1095,15 +1118,18 @@ Fprintf(stderr, "Notice: Use of state_discontinuity in a NET_RECEIVE block is un
 			}
 			Insertstr(qexpr, "t + ");
 			if (blocktype == NETRECEIVE) {
+acc_net_add(qname, qpar1, qexpr, qpar2, "0, _tqitem, _weight_index, _ppvar[1*_STRIDE],", "");
 				Insertstr(qpar1->next, "_tqitem, _weight_index, _pnt,");
 			}else if (blocktype == INITIAL1){
-				Insertstr(qpar1->next, "_tqitem, 0, _nt->_vdata[_ppvar[1*_STRIDE]],");
+acc_net_add(qname, qpar1, qexpr, qpar2, "0, _tqitem, 0, _ppvar[1*_STRIDE],", "");
+				Insertstr(qpar1->next, "_tqitem, -1, _nt->_vdata[_ppvar[1*_STRIDE]],");
 			}else{
 diag("net_send allowed only in INITIAL and NET_RECEIVE blocks", (char*)0);
 			}
 		}else if (strcmp(SYM(qname)->name, "net_event") == 0) {
 			net_event_seen_ = 1;
 			if (blocktype == NETRECEIVE) {
+acc_net_add(qname, qpar1, qexpr, qpar2, "1, -1, -1, _ppvar[1*_STRIDE],", ", 0.");
 				Insertstr(qpar1->next, "_pnt,");
 			}else{
 diag("net_event", " only allowed in NET_RECEIVE block");
@@ -1113,6 +1139,7 @@ diag("net_event", " only allowed in NET_RECEIVE block");
 				replacstr(qname, "artcell_net_move");
 			}
 			if (blocktype == NETRECEIVE) {
+acc_net_add(qname, qpar1, qexpr, qpar2, "2, _tqitem, -1, _ppvar[1*_STRIDE],", ", 0.");
 				Insertstr(qpar1->next, "_tqitem, _pnt,");
 			}else{
 diag("net_move", " only allowed in NET_RECEIVE block");

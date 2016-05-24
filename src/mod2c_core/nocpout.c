@@ -316,8 +316,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 		rsuffix = suffix;
 	}
 
-	if (point_process && !artificial_cell && net_receive_
-	  && !net_send_seen_ && !net_event_seen_) {
+	if (point_process && !artificial_cell && net_receive_) {
 	  	net_receive_buffering_ = 1;
 		emit_net_receive_buffering_code();
 	}
@@ -1113,8 +1112,21 @@ Sprintf(buf, "\"%s\", %g,\n", s->name, d1);
 		}
 		sprintf(buf, "\n#define _tqitem &(_nt->_vdata[_ppvar[%d*_STRIDE]])\n", tqitem_index);
 		Lappendstr(defs_list, buf);
+		if (net_receive_buffering_) {
+			sprintf(buf, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n#undef _tqitem\
+\n#define _tqitem _ppvar[%d*_STRIDE]\
+\n#endif\
+\n\n", tqitem_index);
+			Lappendstr(defs_list, buf);
+		}
 		if (net_send_delivered_) {
-			insertstr(net_send_delivered_, "  if (_lflag == 1. ) {*(_tqitem) = 0;}\n");
+			insertstr(net_send_delivered_, "\
+\n#if !NET_RECEIVE_BUFFERING\
+\n  if (_lflag == 1. ) {*(_tqitem) = 0;}\
+\n#endif\
+\n");
 		}
 	}
 	if (net_receive_) {
@@ -1304,6 +1316,13 @@ located in a section and is not associated with an integrator\n"
 \n  hoc_register_net_receive_buffering(_net_buf_receive, _mechtype);\
 \n#endif\
 \n");
+		if (net_send_seen_ || net_event_seen_) {
+			Lappendstr(defs_list, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n  hoc_register_net_send_buffering(_mechtype);\
+\n#endif\
+\n");
+		}
 	}
 	if (net_receive_) {
 		Lappendstr(defs_list, "pnt_receive[_mechtype] = _net_receive;\n");
@@ -2774,7 +2793,7 @@ void emit_net_receive_buffering_code() {
 \n  if (!_ml) { return; }\
 \n  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer;\
 \n  int _i, _j, _k;\
-\n  double _nrt;\
+\n  double _nrt, _nrflag;\
 \n  int stream_id = _nt->stream_id;\
 \n  Point_process* _pnt = _nt->pntprocs;\
 \n  int _pnt_length = _nt->n_pntproc - _nrb->_pnt_offset;\
@@ -2783,13 +2802,45 @@ void emit_net_receive_buffering_code() {
 \n    _j = _nrb->_pnt_index[_i];\
 \n    _k = _nrb->_weight_index[_i];\
 \n    _nrt = _nrb->_nrb_t[_i];\
-\n    _net_receive_kernel(_nrt, _pnt + _j, _k, 0.0);\
+\n    _nrflag = _nrb->_nrb_flag[_i];\
+\n    _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);\
 \n  }\
 \n  _nrb->_cnt = 0;\
 \n  /*printf(\"_net_buf_receive_%s  %%d\\n\", _nt->_id);*/\
-\n}\
 \n", suffix);
 	insertstr(q, buf);
+
+	if (net_send_seen_ || net_event_seen_) {
+		sprintf(buf, "\
+\n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
+\n  for (_i=0; _i < _nsb->_cnt; ++_i) {\
+\n    net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],\
+\n      _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],\
+\n      _nsb->_nsb_t[_i], _nsb->_nsb_flag[_i]);\
+\n  }\
+\n  _nsb->_cnt = 0;\
+\n");
+		insertstr(q, buf);
+	}
+
+	insertstr(q, "\n}\n");
+
+	if (net_send_seen_ || net_event_seen_) {
+		sprintf(buf, "\
+\nstatic void _net_send_buffering(NetSendBuffer_t* _nsb, int _sendtype, int _i_vdata, int _weight_index,\
+\n int _ipnt, double _t, double _flag) {\
+\n  int _i = _nsb->_cnt;\
+\n  if (_i >= _nsb->_size) {\
+\n  }\
+\n  _nsb->_sendtype[_i] = _sendtype;\
+\n  _nsb->_vdata_index[_i] = _i_vdata;\
+\n  _nsb->_weight_index[_i] = _weight_index;\
+\n  _nsb->_pnt_index[_i] = _ipnt;\
+\n  _nsb->_nsb_t[_i] = _t;\
+\n  _nsb->_nsb_flag[_i] = _flag;\
+\n}\n");
+		insertstr(q, buf);
+	}
 
 	sprintf(buf, "\
 \nstatic void _net_receive (Point_process* _pnt, int _weight_index, double _lflag) {\
@@ -2800,11 +2851,13 @@ void emit_net_receive_buffering_code() {
 \n    _nrb->_pnt_index = (int*)erealloc(_nrb->_pnt_index, _nrb->_size*sizeof(int));\
 \n    _nrb->_weight_index = (int*)erealloc(_nrb->_weight_index, _nrb->_size*sizeof(int));\
 \n    _nrb->_nrb_t = (double*)erealloc(_nrb->_nrb_t, _nrb->_size*sizeof(double));\
+\n    _nrb->_nrb_flag = (double*)erealloc(_nrb->_nrb_flag, _nrb->_size*sizeof(double));\
 \n    _nrb->reallocated = 1;\
 \n  }\
 \n  _nrb->_pnt_index[_nrb->_cnt] = _pnt - _nt->pntprocs;\
 \n  _nrb->_weight_index[_nrb->_cnt] = _weight_index;\
 \n  _nrb->_nrb_t[_nrb->_cnt] = _nt->_t;\
+\n  _nrb->_nrb_flag[_nrb->_cnt] = _lflag;\
 \n  ++_nrb->_cnt;\
 \n}\
 \n");
