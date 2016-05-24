@@ -2829,7 +2829,7 @@ void emit_net_receive_buffering_code() {
 		sprintf(buf, "\
 \nstatic void _net_send_buffering(NetSendBuffer_t* _nsb, int _sendtype, int _i_vdata, int _weight_index,\
 \n int _ipnt, double _t, double _flag) {\
-\n  int _i = _nsb->_cnt;\
+\n  int _i = _nsb->_cnt++;\
 \n  if (_i >= _nsb->_size) {\
 \n  }\
 \n  _nsb->_sendtype[_i] = _sendtype;\
