@@ -2800,7 +2800,7 @@ void emit_net_receive_buffering_code() {
 	    sprintf(buf, "\
 \n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
 \n  _nsb->_cnt = 0;\
-\n  #pragma acc update device(_nsb->_cnt)");
+\n  #pragma acc update device(_nsb->_cnt) if(_nt->compute_gpu)");
 	    insertstr(q, buf);
     }
 sprintf(buf, "\
@@ -2825,7 +2825,7 @@ sprintf(buf, "\
 	if (net_send_seen_ || net_event_seen_) {
 		sprintf(buf, "\
 \n  #pragma acc wait(stream_id)\
-\n  #pragma acc update self(_nsb->_cnt)\
+\n  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)\
 \n  update_net_send_buffer_on_host(_nt, _nsb);\
 \n  for (_i=0; _i < _nsb->_cnt; ++_i) {\
 \n    net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],\
