@@ -325,6 +325,9 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n#include \"coreneuron/nrnoc/md1redef.h\"\
 \n#include \"coreneuron/nrnconf.h\"\
 \n#include \"coreneuron/nrnoc/multicore.h\"\n\
+\n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
+\n#include \"coreneuron/nrniv/nrn_acc_manager.h\"\n\
+\n#endif\
 \n#include \"coreneuron/utils/randoms/nrnran123.h\"\n\
 \n#include \"coreneuron/nrnoc/md2redef.h\"\
 \n#if METHOD3\nextern int _method3;\n#endif\n\
@@ -2791,7 +2794,16 @@ void emit_net_receive_buffering_code() {
 \n  if (!_nt->_ml_list) { return; }\
 \n  _Memb_list* _ml = _nt->_ml_list[_mechtype];\
 \n  if (!_ml) { return; }\
-\n  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer;\
+\n  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer;");
+	insertstr(q, buf);
+	if (net_send_seen_ || net_event_seen_) {
+	    sprintf(buf, "\
+\n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
+\n  _nsb->_cnt = 0;\
+\n  #pragma acc update device(_nsb->_cnt)");
+	    insertstr(q, buf);
+    }
+sprintf(buf, "\
 \n  int _i, _j, _k;\
 \n  double _nrt, _nrflag;\
 \n  int stream_id = _nt->stream_id;\
@@ -2812,13 +2824,14 @@ void emit_net_receive_buffering_code() {
 
 	if (net_send_seen_ || net_event_seen_) {
 		sprintf(buf, "\
-\n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
+\n  #pragma acc wait(stream_id)\
+\n  #pragma acc update self(_nsb->_cnt)\
+\n  update_net_send_buffer_on_host(_nt, _nsb);\
 \n  for (_i=0; _i < _nsb->_cnt; ++_i) {\
 \n    net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],\
 \n      _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],\
 \n      _nsb->_nsb_t[_i], _nsb->_nsb_flag[_i]);\
 \n  }\
-\n  _nsb->_cnt = 0;\
 \n");
 		insertstr(q, buf);
 	}
@@ -2829,7 +2842,9 @@ void emit_net_receive_buffering_code() {
 		sprintf(buf, "\
 \nstatic void _net_send_buffering(NetSendBuffer_t* _nsb, int _sendtype, int _i_vdata, int _weight_index,\
 \n int _ipnt, double _t, double _flag) {\
-\n  int _i = _nsb->_cnt++;\
+\n  int _i = 0;\
+\n  #pragma acc atomic capture\
+\n  _i = _nsb->_cnt++;\
 \n  if (_i >= _nsb->_size) {\
 \n  }\
 \n  _nsb->_sendtype[_i] = _sendtype;\
