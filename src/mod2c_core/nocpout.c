@@ -786,9 +786,7 @@ diag("No statics allowed for thread safe models:", s->name);
 			Lappendstr(defs_list, buf);
 		}
 	}
-#if BBCORE
-	Lappendstr(defs_list, "\n#if 0 /*BBCORE*/\n");
-#endif
+
 	Lappendstr(defs_list, "/* connect global user variables to hoc */\n");
 	Lappendstr(defs_list,"static DoubScal hoc_scdoub[] = {\n");
  	ITERATE(q, syminorder) {
@@ -810,9 +808,7 @@ diag("No statics allowed for thread safe models:", s->name);
 		}
 	}
 	Lappendstr(defs_list, "0,0,0\n};\n");
-#if BBCORE
-	Lappendstr(defs_list, "\n#endif /*BBCORE*/\n");
-#endif
+
 	Lappendstr(defs_list, "static double _sav_indep;\n");
 	if (ba_index_ > 0) {
 		Lappendstr(defs_list, "static void _ba1()");
@@ -1376,9 +1372,14 @@ if (_nd->_extnode) {\n\
 		Linsertstr(defs_list, "static void _difusfunc(ldifusfunc2_t, _NrnThread*);\n");
 	}
     } /* end of not "nothing" */
-#if !BBCORE
+#if BBCORE
+	Lappendstr(defs_list, "\
+	hoc_register_var(hoc_scdoub, hoc_vdoub, NULL);\n");
+#else
 	Lappendstr(defs_list, "\
 	hoc_register_var(hoc_scdoub, hoc_vdoub, hoc_intfunc);\n");
+#endif
+#if !BBCORE
 	if (GETWD(buf)) {
 		char buf1[NRN_BUFSIZE];
 #if defined(MINGW)
@@ -2826,7 +2827,9 @@ sprintf(buf, "\
 		sprintf(buf, "\
 \n  #pragma acc wait(stream_id)\
 \n  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)\
+\n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
 \n  update_net_send_buffer_on_host(_nt, _nsb);\
+\n#endif\
 \n  for (_i=0; _i < _nsb->_cnt; ++_i) {\
 \n    net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],\
 \n      _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],\
