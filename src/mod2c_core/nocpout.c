@@ -2024,6 +2024,7 @@ static void del_range(range)
 static void declare_p() {
 	Item *q;
 	Symbol* s;
+	int pcs = 0;
 	
 	ITERATE(q, syminorder) {
 		SYM(q)->used = -1;
@@ -2046,12 +2047,14 @@ static void declare_p() {
 	if (vectorize) {
 		s = ifnew_install("_v_unused");
 		var_count(s);
+		pcs = 1;
 	}
 #endif
 	if (brkpnt_exists) {
 	    if (vectorize) {
 		s = ifnew_install("_g_unused");
 		var_count(s);
+		pcs = 2;
 	    }else{
 		s = ifnew_install("_g");
 		var_count(s);
@@ -2060,6 +2063,21 @@ static void declare_p() {
 	if (debugging_ && net_receive_) {
 		s = ifnew_install("_tsav");
 		var_count(s);
+	}
+	if (pcs) {
+		sprintf(buf, "\
+\n#ifndef NRN_PRCELLSTATE\
+\n#define NRN_PRCELLSTATE 0\
+\n#endif\
+\n#if NRN_PRCELLSTATE\
+\n#define _PRCELLSTATE_V _v_unused = _v;\
+\n#define _PRCELLSTATE_G %s\
+\n#else\
+\n#define _PRCELLSTATE_V /**/\
+\n#define _PRCELLSTATE_G /**/\
+\n#endif\
+\n", (pcs == 2) ? "_g_unused = _g;" : "/**/");
+		Lappendstr(defs_list, buf);
 	}
 }
 

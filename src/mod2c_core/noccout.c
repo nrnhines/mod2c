@@ -103,7 +103,7 @@ static void ext_vdef() {
 #if CACHEVEC == 0
 			P("    _v = NODEV(_nd);\n");
 #else
-			P("    _v = _vec_v[_nd_idx];\n");
+			P("    _v = _vec_v[_nd_idx];\n    _PRCELLSTATE_V\n");
 #endif
 			
 			P(" }\n");
@@ -112,7 +112,7 @@ static void ext_vdef() {
 			P(" _nd = _ml->_nodelist[_iml];\n");
 			P(" _v = NODEV(_nd);\n");
 #else
-			P("    _v = _vec_v[_nd_idx];\n");
+			P("    _v = _vec_v[_nd_idx];\n    _PRCELLSTATE_V\n");
 #endif
 		}
 }
@@ -379,7 +379,7 @@ void c_out(const char* prefix)
 #else
 	  P(" _p = _prop->param;  _ppvar = _prop->dparam;\n");
 #endif
-	  P(" v=_v;\n{\n");
+	  P(" v=_v;\n _PRCELLSTATE_V\n{\n");
 	  printlist(get_ion_variables(1));
 	  if (nrnstate) {
 		  printlist(nrnstate);
@@ -722,7 +722,7 @@ void c_out_vectorize(const char* prefix)
 		P(" _tsav = -1e20;\n");
 	}
 	if (!artificial_cell) {ext_vdef();}
-	if (!artificial_cell) {P(" v = _v;\n");}
+	if (!artificial_cell) {P(" v = _v;\n _PRCELLSTATE_V\n");}
 	printlist(get_ion_variables(1));
 	P(" initmodel(_threadargs_);\n");
 	printlist(set_ion_variables(2));
@@ -814,6 +814,7 @@ void c_out_vectorize(const char* prefix)
 		P(" _g *=  _mfact;\n");
 		P(" _rhs *= _mfact;\n");
 	  }
+	  P(" _PRCELLSTATE_G\n");
 	if (electrode_current) {
 #if CACHEVEC == 0
 		P("	NODERHS(_nd) += _rhs;\n");
