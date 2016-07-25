@@ -713,6 +713,7 @@ void c_out_vectorize(const char* prefix)
         P("\n#if defined(PG_ACC_BUGS)\n");
         P("#pragma acc update device (celsius) if(_nt->compute_gpu)\n");
         P("#endif\n");
+	P("_ACC_GLOBALS_UPDATE_\n");
 
 	 pr_layout_for_p(1, NRN_INIT);
 

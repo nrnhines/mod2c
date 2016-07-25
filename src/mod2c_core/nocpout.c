@@ -209,6 +209,7 @@ static Item* net_init_q1_;
 static Item* net_init_q2_;
 static int ba_index_; /* BEFORE AFTER blocks. See bablk */
 static List* ba_list_;
+static List* acc_globals_update_list;
 
 #if CVODE
 List* state_discon_list_;
@@ -358,12 +359,14 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_shadow_rhs[0:_nt->shadow_rhs_cnt], _vec_shadow_d[0:_nt->shadow_rhs_cnt], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
 \n#define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma(\"acc parallel loop present(_pnt[0:_pnt_length], _nrb[0:1], _nt[0:1], nrn_threads[0:nrn_nthread]) if(_nt->compute_gpu) async(stream_id)\")\
+\n#define _ACC_GLOBALS_UPDATE_ if (_nt->compute_gpu) {_acc_globals_update();}\
 \n#else\
 \n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"\")\
 \n#define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma(\"\")\
+\n#define _ACC_GLOBALS_UPDATE_ ;\
 \n#endif\
 \n \
 \n#if defined(__clang__)\
@@ -706,6 +709,7 @@ sprintf(buf, "static double %s;\n", SYM(q)->name);
 		++thread_data_index;
 	}
 	gind = 0;
+	acc_globals_update_list = newlist();
  	SYMLISTITER { /* globals are now global with respect to C as well as hoc */
 		s = SYM(q);
 		if (s->nrntype & (NRNGLOBAL)) {
@@ -740,10 +744,33 @@ s->name, suffix, gind, s->name, gind);
 				Sprintf(buf, "double %s = %g;\n", s->name, d1);
 			}
 			Lappendstr(defs_list, buf);
+#if BBCORE
+			if (s->subtype & ARRAY) {
+				Sprintf(buf, "#pragma acc declare copyin (%s,%d)\n", s->name, s->araydim);
+			}else{
+				Sprintf(buf, "#pragma acc declare copyin (%s)\n", s->name);
+			}
+			Lappendstr(defs_list, buf);
+
+			if (s->subtype & ARRAY) {
+				Sprintf(buf, "#pragma update device (%s,%d)\n", s->name, s->araydim);
+			}else{
+				Sprintf(buf, "#pragma update device (%s)\n", s->name);
+			}
+			Lappendstr(acc_globals_update_list, buf);
+#endif
 		}
 	}
 
 #if BBCORE
+	if (acc_globals_update_list) {
+		Lappendstr(defs_list, "\nstatic void _acc_globals_update() {\n");
+		if (acc_globals_update_list->next != acc_globals_update_list) {
+			movelist(acc_globals_update_list->next, acc_globals_update_list->prev, defs_list);
+		}
+		Lappendstr(defs_list, "}\n");
+	}
+
 	Lappendstr(defs_list, "\n#if 0 /*BBCORE*/\n");
 #endif
 	Lappendstr(defs_list, "/* some parameters have upper and lower limits */\n");
