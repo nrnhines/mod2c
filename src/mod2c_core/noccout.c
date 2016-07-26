@@ -117,6 +117,41 @@ static void ext_vdef() {
 		}
 }
 
+static void rhs_d_pnt_race(const char* r, const char* d) {
+    sprintf(buf, "\
+\n\
+\n#ifdef _OPENACC\
+\n  if(_nt->compute_gpu) {\
+\n    #pragma acc atomic update\
+\n    _vec_rhs[_nd_idx] %s _rhs;\
+\n    #pragma acc atomic update\
+\n    _vec_d[_nd_idx] %s _g;\
+\n  } else {\
+\n    _vec_shadow_rhs[_iml] = _rhs;\
+\n    _vec_shadow_d[_iml] = _g;\
+\n  }\
+\n#else\
+\n  _vec_shadow_rhs[_iml] = _rhs;\
+\n  _vec_shadow_d[_iml] = _g;\
+\n#endif\
+\n }\
+\n#ifdef _OPENACC\
+\n    if(!(_nt->compute_gpu)) { \
+\n        for (_iml = 0; _iml < _cntml_actual; ++_iml) {\
+\n           int _nd_idx = _ni[_iml];\
+\n           _vec_rhs[_nd_idx] %s _vec_shadow_rhs[_iml];\
+\n           _vec_d[_nd_idx] %s _vec_shadow_d[_iml];\
+\n        }\
+\n#else\
+\n for (_iml = 0; _iml < _cntml_actual; ++_iml) {\
+\n   int _nd_idx = _ni[_iml];\
+\n   _vec_rhs[_nd_idx] %s _vec_shadow_rhs[_iml];\
+\n   _vec_d[_nd_idx] %s _vec_shadow_d[_iml];\
+\n#endif\
+\n", r, d,  r, d,  r, d);
+  P(buf);
+}
+
 /* when vectorize = 0 */
 void c_out(const char* prefix)
 {
@@ -817,57 +852,30 @@ void c_out_vectorize(const char* prefix)
 	  }
 	  P(" _PRCELLSTATE_G\n");
 	if (electrode_current) {
-#if CACHEVEC == 0
-		P("	NODERHS(_nd) += _rhs;\n");
-		P("	NODED(_nd) -= _g;\n");
-#else
-		P("	_vec_rhs[_nd_idx] += _rhs;\n");
-		P("	_vec_d[_nd_idx] -= _g;\n");
-#endif
 		P("#if EXTRACELLULAR\n");
 		P(" if (_nd->_extnode) {\n");
 		P("   *_nd->_extnode->_rhs[0] += _rhs;\n");
 		P("   *_nd->_extnode->_d[0] += _g;\n");
 		P(" }\n");
 		P("#endif\n");
+#if CACHEVEC == 0
+		P("	NODERHS(_nd) += _rhs;\n");
+		P("	NODED(_nd) -= _g;\n");
+#else
+		if (point_process) {
+			rhs_d_pnt_race("+=", "-=");
+		}else{
+			P("	_vec_rhs[_nd_idx] += _rhs;\n");
+			P("	_vec_d[_nd_idx] -= _g;\n");
+		}
+#endif
 	}else{
 #if CACHEVEC == 0
 		P("	NODERHS(_nd) -= _rhs;\n");
 		P("	NODED(_nd) += _g;\n");
 #else
 		if (point_process) {
-
-		    P("#ifdef _OPENACC\n");
-            P("  if(_nt->compute_gpu) {\n");
-            P("     #pragma acc atomic update\n");
-            P("    _vec_rhs[_nd_idx] -= _rhs;\n");
-            P("     #pragma acc atomic update\n");
-            P("    _vec_d[_nd_idx] += _g;\n");
-            P("  } else {\n");
-            P("     _vec_shadow_rhs[_iml] = _rhs;\n");
-            P("     _vec_shadow_d[_iml] = _g;\n");
-            P("  }\n");
-		    P("#else\n");
-
-			P("	_vec_shadow_rhs[_iml] = _rhs;\n\
-    _vec_shadow_d[_iml] = _g;\n\
-#endif\n\
- }\n\
-#ifdef _OPENACC\n\
-    if(!(_nt->compute_gpu)) { \n\
-        for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n\
-           int _nd_idx = _ni[_iml];\n\
-           _vec_rhs[_nd_idx] -= _vec_shadow_rhs[_iml];\n\
-           _vec_d[_nd_idx] += _vec_shadow_d[_iml];\n\
-        }\n\
-#else\n\
- for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n\
-   int _nd_idx = _ni[_iml];\n\
-   _vec_rhs[_nd_idx] -= _vec_shadow_rhs[_iml];\n\
-   _vec_d[_nd_idx] += _vec_shadow_d[_iml];\n\
-#endif\n\
-");
-
+			rhs_d_pnt_race("-=", "+=");
 		}else{
 			P("	_vec_rhs[_nd_idx] -= _rhs;\n");
 			P("	_vec_d[_nd_idx] += _g;\n");
