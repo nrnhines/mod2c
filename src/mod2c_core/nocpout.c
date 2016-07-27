@@ -753,9 +753,9 @@ s->name, suffix, gind, s->name, gind);
 			Lappendstr(defs_list, buf);
 
 			if (s->subtype & ARRAY) {
-				Sprintf(buf, "#pragma update device (%s,%d)\n", s->name, s->araydim);
+				Sprintf(buf, "#pragma acc update device (%s,%d)\n", s->name, s->araydim);
 			}else{
-				Sprintf(buf, "#pragma update device (%s)\n", s->name);
+				Sprintf(buf, "#pragma acc update device (%s)\n", s->name);
 			}
 			Lappendstr(acc_globals_update_list, buf);
 #endif
