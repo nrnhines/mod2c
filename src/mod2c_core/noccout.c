@@ -58,6 +58,7 @@ char           *modelline;
 extern int	brkpnt_exists;
 extern int	artificial_cell;
 extern int	net_receive_;
+extern int	net_send_seen_;
 extern int	debugging_;
 extern int	point_process;
 
@@ -720,6 +721,10 @@ void c_out_vectorize(const char* prefix)
 
 	P("\nstatic void initmodel(_threadargsproto_) {\n  int _i; double _save;");
 	P("{\n");
+	if (net_send_seen_) {
+		P("  #pragma acc update device (_mechtype);\n");
+		P("  _Memb_list* _ml = _nt->_ml_list[_mechtype];\n");
+	}
 	initstates();
 	printlist(initfunc);
 	if (match_bound) {

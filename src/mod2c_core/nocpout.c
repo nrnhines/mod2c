@@ -548,7 +548,11 @@ Sprintf(buf, "static void _hoc_%s(void);\n", s->name);
 	Lappendstr(defs_list, "\n#endif /*BBCORE*/\n");
 #endif
 
-	Lappendstr(defs_list, "static int _mechtype;\n\
+	Lappendstr(defs_list, "static int _mechtype;\n");
+	if (net_send_seen_) {
+		Lappendstr(defs_list, "#pragma acc declare copyin (_mechtype)\n");
+	}
+	Lappendstr(defs_list, "\
 extern int nrn_get_mechtype();\n\
 extern void hoc_register_prop_size(int, int, int);\n\
 extern Memb_func* memb_func;\n\
