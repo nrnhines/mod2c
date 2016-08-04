@@ -2754,7 +2754,7 @@ void cvode_interface(fun, num, neq) Symbol* fun; int num, neq; {
 	}
 	Sprintf(buf, "\n\
 static int _ode_spec%d(_threadargsproto_);\n\
-static int _ode_matsol%d(_threadargsproto_);\n\
+/*static int _ode_matsol%d(_threadargsproto_);*/\n\
 ", num, num);
 	Linsertstr(procfunc, buf);
 }
