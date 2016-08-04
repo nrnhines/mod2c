@@ -2119,6 +2119,7 @@ List *set_ion_variables(block)
 	Item *q, *q1, *qconc;
 	char* in;
 	static List *l;
+	int declared = 0;
 
 	l = newlist();
 	ITERATE(q, useion) {
@@ -2174,13 +2175,14 @@ Sprintf(buf, " _ion_%s = %s;\n", SYM(q1)->name, SYM(q1)->name);
              * out _cntml if SoA. Note 2nd argument added as pe because we see errors 
              * with pointer arithmetic in OpenACC cray compiler
              */
-			Sprintf(buf, "    double *_pe = (&(_ion_%s));\n", SYM(qconc)->name);
+			Sprintf(buf, "    %s _pe = (&(_ion_%s));\n", declared ? "" : "double*", SYM(qconc)->name);
 			Lappendstr(l, buf);
 			Sprintf(buf, "    _Memb_list* _%s_ml;\n", in);
 			Lappendstr(l, buf);
 			Sprintf(buf, "    _%s_ml = _nt->_ml_list[_%s_type];\n", in, in);
 			Lappendstr(l, buf);
-			Sprintf(buf, "    int _tmp_cntml = _%s_ml->_nodecount_padded;\n", in);
+			Sprintf(buf, "    %s _tmp_cntml = _%s_ml->_nodecount_padded;\n", declared ? "" : "int", in);
+			declared = 1;
 			Lappendstr(l, buf);
 			Sprintf(buf, "    nrn_wrote_conc(_%s_type, _pe, %d, _style_%s, nrn_ion_global_map, celsius, _tmp_cntml);\n",
 				in, ic, in);
