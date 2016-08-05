@@ -549,7 +549,7 @@ Sprintf(buf, "static void _hoc_%s(void);\n", s->name);
 #endif
 
 	Lappendstr(defs_list, "static int _mechtype;\n");
-	if (net_send_seen_) {
+	if (net_send_seen_ && !artificial_cell) {
 		Lappendstr(defs_list, "#pragma acc declare copyin (_mechtype)\n");
 	}
 	Lappendstr(defs_list, "\
