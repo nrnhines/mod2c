@@ -473,8 +473,8 @@ void c_out(const char* prefix)
 	P("\n_initlists() {\n");
 #endif
 	P(" int _i; static int _first = 1;\n");
-	P(" int _cntml_actual=0;\n");
-	P(" int _cntml_padded=0;\n");
+	P(" int _cntml_actual=1;\n");
+	P(" int _cntml_padded=1;\n");
 	P(" int _iml=0;\n");
 	P("  if (!_first) return;\n");
 	printlist(initlist);
@@ -964,8 +964,8 @@ void c_out_vectorize(const char* prefix)
 	P("\nstatic void _initlists(){\n");
 	P(" double _x; double* _p = &_x;\n");
 	P(" int _i; static int _first = 1;\n");
-	P(" int _cntml_actual=0;\n");
-	P(" int _cntml_padded=0;\n");
+	P(" int _cntml_actual=1;\n");
+	P(" int _cntml_padded=1;\n");
 	P(" int _iml=0;\n");
 	P("  if (!_first) return;\n");
 	printlist(initlist);
