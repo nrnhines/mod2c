@@ -146,6 +146,12 @@ deriv1_advance, ssprefix,
 method->name, numeqn, listnum, listnum, indepsym->name, dindepname, fun->name, listnum, maxerr_str,
 deriv2_advance);
 	}else{
+	  Sprintf(buf,
+	    "  if (!_thread[_spth%d]._pvoid) {\n"
+	    "    _thread[_spth%d]._pvoid = nrn_cons_sparseobj(%s, %d, _ml, _threadargs_);\n"
+	    "  }\n",
+	    listnum, listnum, fun->name, numeqn);
+	  lappendstr(newtonspace_list, buf);
 Sprintf(buf, "%s%s(&_sparseobj%d, %d, _slist%d, _dlist%d, _p, &%s, %s, %s\
 ,&_coef%d, _linmat%d);\n",
 ssprefix, method->name, listnum, numeqn, listnum, listnum, indepsym->name,
