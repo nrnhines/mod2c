@@ -153,6 +153,7 @@ int electrode_current = 0;
 int thread_data_index = 0;
 List *thread_cleanup_list;
 List *thread_mem_init_list;
+List *newtonspace_list;
 List* toplocal_;
 extern int protect_;
 extern int protect_include_;
@@ -260,6 +261,7 @@ void nrninit() {
 	debugging_ = 1;
 	thread_cleanup_list = newlist();
 	thread_mem_init_list = newlist();
+	newtonspace_list = newlist();
 }
 
 void parout() {

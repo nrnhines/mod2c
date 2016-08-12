@@ -46,6 +46,7 @@ extern List	*currents, *set_ion_variables(), *get_ion_variables();
 extern List	*begin_dion_stmt(), *end_dion_stmt();
 extern List* conductance_;
 extern List* breakpoint_local_current_;
+extern List* newtonspace_list;
 static void conductance_cout();
 #endif
 
@@ -742,6 +743,9 @@ void c_out_vectorize(const char* prefix)
 	  P("_cntml_actual = _ml->_nodecount;\n");
 	  P("_cntml_padded = _ml->_nodecount_padded;\n");
 	  P("_thread = _ml->_thread;\n");
+	ITERATE(q, newtonspace_list) {
+	  P(STR(q));
+	}
 	/*check_tables();*/
 
      /* @todo: will be done once anyway but it seems like this is bein copied

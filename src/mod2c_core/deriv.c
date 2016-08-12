@@ -49,6 +49,7 @@ extern int assert_threadsafe;
 extern int thread_data_index;
 extern List* thread_mem_init_list;
 extern List* thread_cleanup_list;
+extern List* newtonspace_list;
 #endif
 
 #if CVODE
@@ -118,19 +119,24 @@ if (deriv_imp_list) {	/* make sure deriv block translation matches method */
 	Sprintf(buf, "static int _deriv%d_advance = 0;\n", listnum);
 	q = linsertstr(procfunc, buf);
 	Sprintf(buf, "\n#define _deriv%d_advance _thread[%d]._i\n\
-#define _dith%d %d\n#define _recurse _thread[%d]._i\n#define _newtonspace%d _thread[%d]._pvoid\nextern void* nrn_cons_newtonspace(int);\n\
-", listnum, thread_data_index, listnum, thread_data_index+1, thread_data_index+2,
-listnum, thread_data_index+3);
+#define _dith%d %d\n#define _newtonspace%d _thread[%d]._pvoid\nextern void* nrn_cons_newtonspace(int, int);\n\
+", listnum, thread_data_index, listnum, thread_data_index+1, listnum, thread_data_index+2);
+
 	vectorize_substitute(q, buf);
-	Sprintf(buf, "  _thread[_dith%d]._pval = (double*)ecalloc(%d, sizeof(double));\n", listnum, 2*numeqn);
+	Sprintf(buf, "  _thread[_dith%d]._pval = NULL;", listnum);
 	lappendstr(thread_mem_init_list, buf);
-	Sprintf(buf, "  _newtonspace%d = nrn_cons_newtonspace(%d);\n", listnum, numeqn);
-	lappendstr(thread_mem_init_list, buf);
+	Sprintf(buf,
+          "  if (!_newtonspace%d) {\n"
+          "    _newtonspace%d = nrn_cons_newtonspace(%d, _cntml_padded);\n"
+          "    _thread[_dith%d]._pval = makevector(2*%d*_cntml_padded*sizeof(double));\n"
+          "  }\n",
+          listnum, listnum, numeqn, listnum, numeqn);
+	lappendstr(newtonspace_list, buf);
 	Sprintf(buf, "  free((void*)(_thread[_dith%d]._pval));\n", listnum);
 	lappendstr(thread_cleanup_list, buf);
 	Sprintf(buf, "  nrn_destroy_newtonspace(_newtonspace%d);\n", listnum);
 	lappendstr(thread_cleanup_list, buf);
-	thread_data_index += 4;
+	thread_data_index += 3;
 }else{
 	Strcpy(deriv1_advance, "");
 	Strcpy(deriv2_advance, "");
@@ -613,11 +619,11 @@ if (_deriv%d_advance) {\n", count, numlist);
 		q = insertsym(q4, sp);
 		eqnqueue(q);
 Sprintf(buf,
-"_p[_dlist%d[_id]*_STRIDE] - (_p[_slist%d[_id]*_STRIDE] - _savstate%d[_id])/d%s;\n",
+"_p[_dlist%d[_id]*_STRIDE] - (_p[_slist%d[_id]*_STRIDE] - _savstate%d[_id*_STRIDE])/d%s;\n",
    numlist, numlist, numlist, indepsym->name);
 		Insertstr(q4, buf);
 Sprintf(buf,
-"}else{\n_dlist%d[++_counte] = _p[_slist%d[_id]*_STRIDE] - _savstate%d[_id];}}}\n",
+"}else{\n_dlist%d[(++_counte)*_STRIDE] = _p[_slist%d[_id]*_STRIDE] - _savstate%d[_id*_STRIDE];}}}\n",
    numlist+1, numlist, numlist);
 		Insertstr(q4, buf);
 	}else{
@@ -631,7 +637,7 @@ Sprintf(buf,
 	q = mixed_eqns(q2, q3, q4); /* numlist now incremented */
 	if (deriv_implicit) {
 		Sprintf(buf,
-"{int _id; for(_id=0; _id < %d; _id++) { _savstate%d[_id] = _p[_slist%d[_id]*_STRIDE];}}\n",
+"{int _id; for(_id=0; _id < %d; _id++) { _savstate%d[_id*_STRIDE] = _p[_slist%d[_id]*_STRIDE];}}\n",
 		count, derfun->u.i, derfun->u.i);
 		Insertstr(q, buf);
 	}
