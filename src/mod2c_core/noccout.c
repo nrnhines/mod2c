@@ -723,7 +723,7 @@ void c_out_vectorize(const char* prefix)
 	P("\nstatic void initmodel(_threadargsproto_) {\n  int _i; double _save;");
 	P("{\n");
 	if (net_send_seen_ && !artificial_cell) {
-		P("  #pragma acc update device (_mechtype)\n");
+		P("  #pragma acc update device (_mechtype) if(_nt->compute_gpu)\n");
 		P("  _Memb_list* _ml = _nt->_ml_list[_mechtype];\n");
 	}
 	initstates();
