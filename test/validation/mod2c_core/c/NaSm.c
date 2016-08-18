@@ -10,6 +10,10 @@
 #include "coreneuron/nrnconf.h"
 #include "coreneuron/nrnoc/multicore.h"
 
+#if defined(_OPENACC) && !defined(DISABLE_OPENACC)
+#include "coreneuron/nrniv/nrn_acc_manager.h"
+
+#endif
 #include "coreneuron/utils/randoms/nrnran123.h"
 
 #include "coreneuron/nrnoc/md2redef.h"
@@ -23,6 +27,27 @@ extern int _method3;
 #define exp hoc_Exp
 #endif
 extern double hoc_Exp(double);
+#endif
+ 
+#if defined(_OPENACC) && !defined(DISABLE_OPENACC)
+#include <openacc.h>
+#if defined(PG_ACC_BUGS)
+#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size][0:3], _nt[0:1]) if(_nt->compute_gpu)")
+#else
+#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1]) if(_nt->compute_gpu)")
+#endif
+#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)")
+#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)")
+#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_shadow_rhs[0:_nt->shadow_rhs_cnt], _vec_shadow_d[0:_nt->shadow_rhs_cnt], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)")
+#define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma("acc parallel loop present(_pnt[0:_pnt_length], _nrb[0:1], _nt[0:1], nrn_threads[0:nrn_nthread]) if(_nt->compute_gpu) async(stream_id)")
+#define _ACC_GLOBALS_UPDATE_ if (_nt->compute_gpu) {_acc_globals_update();}
+#else
+#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("")
+#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma("")
+#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma("")
+#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma("")
+#define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma("")
+#define _ACC_GLOBALS_UPDATE_ ;
 #endif
  
 #if defined(__clang__)
@@ -56,9 +81,13 @@ extern double hoc_Exp(double);
 #define _nrn_current _nrn_current__NaSm
 #define nrn_jacob _nrn_jacob__NaSm
 #define nrn_state _nrn_state__NaSm
-#define _net_receive _net_receive__NaSm 
-#define rates rates__NaSm 
-#define states states__NaSm 
+#define initmodel initmodel__NaSm
+#define _net_receive _net_receive__NaSm
+#define nrn_state_launcher nrn_state_NaSm_launcher
+#define nrn_cur_launcher nrn_cur_NaSm_launcher
+#define nrn_jacob_launcher nrn_jacob_NaSm_launcher 
+#define rates rates_NaSm 
+#define states states_NaSm 
  
 #define _threadargscomma_ _iml, _cntml_padded, _p, _ppvar, _thread, _nt, v,
 #define _threadargsprotocomma_ int _iml, int _cntml_padded, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,
@@ -82,6 +111,17 @@ extern double hoc_Exp(double);
 #define ina _p[6*_STRIDE]
 #define _v_unused _p[7*_STRIDE]
 #define _g_unused _p[8*_STRIDE]
+ 
+#ifndef NRN_PRCELLSTATE
+#define NRN_PRCELLSTATE 0
+#endif
+#if NRN_PRCELLSTATE
+#define _PRCELLSTATE_V _v_unused = _v;
+#define _PRCELLSTATE_G _g_unused = _g;
+#else
+#define _PRCELLSTATE_V /**/
+#define _PRCELLSTATE_G /**/
+#endif
 #define _ion_ina	_nt_data[_ppvar[0*_STRIDE]]
 #define _ion_dinadv	_nt_data[_ppvar[1*_STRIDE]]
  
@@ -101,6 +141,9 @@ extern "C" {
  static ThreadDatum* _extcall_thread;
  /* external NEURON variables */
  extern double celsius;
+ #if defined(PG_ACC_BUGS)
+#pragma acc declare copyin(celsius)
+#endif
  
 #if 0 /*BBCORE*/
  /* declaration of user functions */
@@ -108,7 +151,7 @@ extern "C" {
  
 #endif /*BBCORE*/
  static int _mechtype;
-extern int nrn_get_mechtype();
+ extern int nrn_get_mechtype();
 extern void hoc_register_prop_size(int, int, int);
 extern Memb_func* memb_func;
  
@@ -124,18 +167,35 @@ extern Memb_func* memb_func;
  /* declare global and static user variables */
 #define Etemp Etemp_NaSm
  double Etemp = 21;
+ #pragma acc declare copyin (Etemp)
 #define Vtm Vtm_NaSm
  double Vtm = -33.5;
+ #pragma acc declare copyin (Vtm)
 #define Vsm Vsm_NaSm
  double Vsm = -16;
+ #pragma acc declare copyin (Vsm)
 #define ena ena_NaSm
  double ena = 40;
+ #pragma acc declare copyin (ena)
 #define ktm ktm_NaSm
  double ktm = 26.3;
+ #pragma acc declare copyin (ktm)
 #define ksm ksm_NaSm
  double ksm = 9.4;
+ #pragma acc declare copyin (ksm)
 #define tom tom_NaSm
  double tom = 637.8;
+ #pragma acc declare copyin (tom)
+ 
+static void _acc_globals_update() {
+ #pragma acc update device (Etemp)
+ #pragma acc update device (Vtm)
+ #pragma acc update device (Vsm)
+ #pragma acc update device (ena)
+ #pragma acc update device (ktm)
+ #pragma acc update device (ksm)
+ #pragma acc update device (tom)
+ }
  
 #if 0 /*BBCORE*/
  /* some parameters have upper and lower limits */
@@ -151,8 +211,6 @@ extern Memb_func* memb_func;
 #endif /*BBCORE*/
  static double delta_t = 1;
  static double m0 = 0;
- 
-#if 0 /*BBCORE*/
  /* connect global user variables to hoc */
  static DoubScal hoc_scdoub[] = {
  "ena_NaSm", &ena_NaSm,
@@ -167,8 +225,6 @@ extern Memb_func* memb_func;
  static DoubVec hoc_vdoub[] = {
  0,0,0
 };
- 
-#endif /*BBCORE*/
  static double _sav_indep;
  static void nrn_alloc(double*, Datum*, int);
 static void  nrn_init(_NrnThread*, _Memb_list*, int);
@@ -227,6 +283,7 @@ extern void _cvode_abstol( Symbol**, double*, int);
   hoc_register_prop_size(_mechtype, _psize, _ppsize);
   hoc_register_dparam_semantics(_mechtype, 0, "na_ion");
   hoc_register_dparam_semantics(_mechtype, 1, "na_ion");
+ 	hoc_register_var(hoc_scdoub, hoc_vdoub, NULL);
  }
 static char *modelname = "A slow Sodium current";
 
@@ -237,7 +294,7 @@ static void _modl_cleanup(){ _match_recurse=1;}
 static int rates(_threadargsprotocomma_ double);
  
 static int _ode_spec1(_threadargsproto_);
-static int _ode_matsol1(_threadargsproto_);
+/*static int _ode_matsol1(_threadargsproto_);*/
  static int _slist1[1], _dlist1[1];
  static inline int states(_threadargsproto_);
  
@@ -304,14 +361,23 @@ double _v, v; int* _ni; int _iml, _cntml_padded, _cntml_actual;
 _cntml_actual = _ml->_nodecount;
 _cntml_padded = _ml->_nodecount_padded;
 _thread = _ml->_thread;
+
+#if defined(PG_ACC_BUGS)
+#pragma acc update device (celsius) if(_nt->compute_gpu)
+#endif
+_ACC_GLOBALS_UPDATE_
 double * _nt_data = _nt->_data;
 double * _vec_v = _nt->_actual_v;
+int stream_id = _nt->stream_id;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
 #endif
 #if LAYOUT == 0 /*SoA*/
  _p = _ml->_data; _ppvar = _ml->_pdata;
+/* insert compiler dependent ivdep like pragma */
+_PRAGMA_FOR_VECTOR_LOOP_
+_PRAGMA_FOR_INIT_ACC_LOOP_
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
 #if LAYOUT > 1 /*AoSoA*/
@@ -319,7 +385,9 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
     int _nd_idx = _ni[_iml];
     _v = _vec_v[_nd_idx];
+    _PRCELLSTATE_V
  v = _v;
+ _PRCELLSTATE_V
  initmodel(_threadargs_);
  }
 }
@@ -333,6 +401,13 @@ static double _nrn_current(_threadargsproto_, double _v){double _current=0.;v=_v
 } return _current;
 }
 
+#if defined(ENABLE_CUDA_INTERFACE) && defined(_OPENACC)
+  void nrn_state_launcher(_NrnThread*, _Memb_list*, int, int);
+  void nrn_jacob_launcher(_NrnThread*, _Memb_list*, int, int);
+  void nrn_cur_launcher(_NrnThread*, _Memb_list*, int, int);
+#endif
+
+
 static void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type) {
 double* _p; Datum* _ppvar; ThreadDatum* _thread;
 int* _ni; double _rhs, _g, _v, v; int _iml, _cntml_padded, _cntml_actual;
@@ -342,8 +417,17 @@ _cntml_padded = _ml->_nodecount_padded;
 _thread = _ml->_thread;
 double * _vec_rhs = _nt->_actual_rhs;
 double * _vec_d = _nt->_actual_d;
+
+#if defined(ENABLE_CUDA_INTERFACE) && defined(_OPENACC) && !defined(DISABLE_OPENACC)
+  _NrnThread* d_nt = acc_deviceptr(_nt);
+  _Memb_list* d_ml = acc_deviceptr(_ml);
+  nrn_cur_launcher(d_nt, d_ml, _type, _cntml_actual);
+  return;
+#endif
+
 double * _nt_data = _nt->_data;
 double * _vec_v = _nt->_actual_v;
+int stream_id = _nt->stream_id;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
@@ -352,6 +436,7 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data; _ppvar = _ml->_pdata;
 /* insert compiler dependent ivdep like pragma */
 _PRAGMA_FOR_VECTOR_LOOP_
+_PRAGMA_FOR_CUR_ACC_LOOP_
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
 #if LAYOUT > 1 /*AoSoA*/
@@ -359,6 +444,7 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
     int _nd_idx = _ni[_iml];
     _v = _vec_v[_nd_idx];
+    _PRCELLSTATE_V
  _g = _nrn_current(_threadargs_, _v + .001);
  	{ double _dina;
   _dina = ina;
@@ -367,6 +453,7 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  	}
  _g = (_g - _rhs)/.001;
   _ion_ina += ina ;
+ _PRCELLSTATE_G
 	_vec_rhs[_nd_idx] -= _rhs;
 	_vec_d[_nd_idx] += _g;
  
@@ -381,8 +468,17 @@ double v, _v = 0.0; int* _ni; int _iml, _cntml_padded, _cntml_actual;
 _cntml_actual = _ml->_nodecount;
 _cntml_padded = _ml->_nodecount_padded;
 _thread = _ml->_thread;
+
+#if defined(ENABLE_CUDA_INTERFACE) && defined(_OPENACC) && !defined(DISABLE_OPENACC)
+  _NrnThread* d_nt = acc_deviceptr(_nt);
+  _Memb_list* d_ml = acc_deviceptr(_ml);
+  nrn_state_launcher(d_nt, d_ml, _type, _cntml_actual);
+  return;
+#endif
+
 double * _nt_data = _nt->_data;
 double * _vec_v = _nt->_actual_v;
+int stream_id = _nt->stream_id;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
@@ -391,6 +487,7 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data; _ppvar = _ml->_pdata;
 /* insert compiler dependent ivdep like pragma */
 _PRAGMA_FOR_VECTOR_LOOP_
+_PRAGMA_FOR_STATE_ACC_LOOP_
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
 #if LAYOUT > 1 /*AoSoA*/
@@ -398,6 +495,7 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
 #endif
     int _nd_idx = _ni[_iml];
     _v = _vec_v[_nd_idx];
+    _PRCELLSTATE_V
  v=_v;
 {
  {   states(_threadargs_);
@@ -410,8 +508,8 @@ static void terminal(){}
 static void _initlists(){
  double _x; double* _p = &_x;
  int _i; static int _first = 1;
- int _cntml_actual=0;
- int _cntml_padded=0;
+ int _cntml_actual=1;
+ int _cntml_padded=1;
  int _iml=0;
   if (!_first) return;
  _slist1[0] = &(m) - _p;  _dlist1[0] = &(Dm) - _p;
