@@ -344,9 +344,22 @@ void massagekinetic(q1, q2, q3, q4, sensused) /*KINETIC NAME stmtlist '}'*/
 	numlist++;
 	fun->u.i = numlist;
 	
+#if 0
 	Sprintf(buf, "static int %s();\n", SYM(q2)->name);
 	Linsertstr(procfunc, buf);
 	replacstr(q1, "\nstatic int");
+#else
+	Sprintf(buf,
+	  "\n"
+	  "/* _kinetic_ %s %s */\n"
+	  "#ifndef INSIDE_NMODL\n"
+	  "#define INSIDE_NMODL\n"
+	  "#endif\n"
+	  "#include \"_kinderivh\"\n"
+	  , SYM(q2)->name, suffix);
+	Linsertstr(procfunc, buf);
+	replacstr(q1, "\nint");
+#endif
 	qv = insertstr(q3, "()\n");
 #if VECTORIZE
 if (vectorize) {

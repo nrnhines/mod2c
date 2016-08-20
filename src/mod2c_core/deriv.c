@@ -162,31 +162,31 @@ dindepname, fun->name, listnum, listnum);
 	if (method->subtype & DERF) { /* derivimplicit */
 Sprintf(buf,
 "%s"
-"  #if !defined(_derivimplic_%s)\n"
-"    #define _derivimplic_%s 0\n"
+"  #if !defined(_derivimplic_%s%s)\n"
+"    #define _derivimplic_%s%s 0\n"
 "  #endif\n"
 "  #pragma acc routine(%s%s_thread) seq\n"
-"  %s%s_thread(%d, _slist%d, _dlist%d, _derivimplic_%s, _threadargs_);\n"
+"  %s%s_thread(%d, _slist%d, _dlist%d, _derivimplic_%s%s, _threadargs_);\n"
 "%s",
 deriv1_advance,
-fun->name, fun->name,
+fun->name, suffix, fun->name, suffix,
 ssprefix, method->name, ssprefix, method->name,
-numeqn, listnum, listnum, fun->name,
+numeqn, listnum, listnum, fun->name, suffix,
 deriv2_advance);
 	vectorize_substitute(qsol, buf);
 	}else{ /* kinetic */
    if (vectorize) {
 Sprintf(buf,
 "\n"
-"  #if !defined(_kinetic_%s)\n"
-"    #define _kinetic_%s 0\n"
+"  #if !defined(_kinetic_%s%s)\n"
+"    #define _kinetic_%s%s 0\n"
 "  #endif\n"
 "  #pragma acc routine(%s%s_thread) seq\n"
-"  %s%s_thread(&_thread[_spth%d]._pvoid, %d, _slist%d, _dlist%d, &%s, %s, _kinetic_%s, _linmat%d, _threadargs_);\n",
-fun->name, fun->name,
+"  %s%s_thread(&_thread[_spth%d]._pvoid, %d, _slist%d, _dlist%d, &%s, %s, _kinetic_%s%s, _linmat%d, _threadargs_);\n",
+fun->name, suffix, fun->name, suffix,
 ssprefix, method->name,
 ssprefix, method->name, listnum, numeqn, listnum, listnum, indepsym->name,
-dindepname, fun->name, listnum);
+dindepname, fun->name, suffix, listnum);
 	vectorize_substitute(qsol, buf);
    }
 #endif
@@ -479,17 +479,7 @@ void massagederiv(q1, q2, q3, q4, sensused)
 	if (!massage_list_) { massage_list_ = newlist(); }
 	Lappendsym(massage_list_, SYM(q2));
 	
-	/* all this junk is still in the intoken list */
-	Sprintf(buf, "static inline int %s(_threadargsproto_);\n", SYM(q2)->name);
-	Linsertstr(procfunc, buf);
-	replacstr(q1, "\nstatic int"); q = insertstr(q3, "() {_reset=0;\n");
 	derfun = SYM(q2);
-	vectorize_substitute(q, "(_threadargsproto_) {int _reset=0; int error = 0;\n");
-
-	if (derfun->subtype & DERF && derfun->u.i) {
-		diag("DERIVATIVE merging not implemented", (char *)0);
-	}
-
 	/* check if we are to translate using derivimplicit method */
 	deriv_implicit = 0;
 	if (deriv_imp_list) ITERATE(q, deriv_imp_list) {
@@ -498,6 +488,24 @@ void massagederiv(q1, q2, q3, q4, sensused)
 			break;
 		}
 	}
+
+	/* all this junk is still in the intoken list */
+	Sprintf(buf, "static inline int %s(_threadargsproto_);\n", SYM(q2)->name);
+	if (deriv_implicit == 1) {
+	  Sprintf(buf, "extern int %s(_threadargsproto_);\n", SYM(q2)->name);
+	}
+	Linsertstr(procfunc, buf);
+	if (deriv_implicit == 1) {
+	  replacstr(q1, "\nint"); q = insertstr(q3, "() {_reset=0;\n");
+	}else{
+	  replacstr(q1, "\nstatic int"); q = insertstr(q3, "() {_reset=0;\n");
+	}
+	vectorize_substitute(q, "(_threadargsproto_) {int _reset=0; int error = 0;\n");
+
+	if (derfun->subtype & DERF && derfun->u.i) {
+		diag("DERIVATIVE merging not implemented", (char *)0);
+	}
+
 	numlist++;
 	derfun->u.i = numlist;
 	derfun->subtype |= DERF;

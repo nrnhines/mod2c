@@ -206,17 +206,31 @@ numlist-1, numlist-1,
 numlist, numlist-1, counts);
 	vectorize_substitute(q, buf);
 
-	Sprintf(buf, "error = newton(%d,_slist%d, _p, _cb_%s, _dlist%d);\n",
-		counts, numlist, SYM(q2)->name, numlist);
+	Sprintf(buf, "error = newton(%d,_slist%d, _p, _cb_%s%s, _dlist%d);\n",
+		counts, numlist, SYM(q2)->name, suffix, numlist);
 	qret = insertstr(q3, buf);
-	Sprintf(buf, "_reset = nrn_newton_thread(_newtonspace%d, %d,_slist%d, _cb_%s, _dlist%d,  _threadargs_);\n",
-		numlist-1, counts, numlist, SYM(q2)->name, numlist);
+	Sprintf(buf, 
+	  "#pragma add routine(nrn_newton_thread) seq\n"
+	  "_reset = nrn_newton_thread(_newtonspace%d, %d,_slist%d, _cb_%s%s, _dlist%d,  _threadargs_);\n"
+	  , numlist-1, counts, numlist, SYM(q2)->name, suffix, numlist);
 	vectorize_substitute(qret, buf);
 	Insertstr(q3, "if(_reset) {abort_run(_reset);}}\n");
-
-	Sprintf(buf, "static int _cb_%s(_threadargsproto_);\n", SYM(q2)->name);
+	Sprintf(buf,
+	  "extern int _cb_%s%s(_threadargsproto_);\n"
+	  , SYM(q2)->name, suffix);
 	Linsertstr(procfunc, buf);
-	Sprintf(buf, "\n  return _reset;\n}\n\nstatic int _cb_%s (_threadargsproto_) {  int _reset=0;\n", SYM(q2)->name);
+
+	Sprintf(buf,
+	  "\n"
+	  "/* _derivimplic_ %s %s */\n"
+	  "#ifndef INSIDE_NMODL\n"
+	  "#define INSIDE_NMODL\n"
+	  "#endif\n"
+	  "#include \"_kinderiv.h\"\n"
+	  , SYM(q2)->name, suffix);
+	Linsertstr(procfunc, buf);
+
+	Sprintf(buf, "\n  return _reset;\n}\n\nint _cb_%s%s (_threadargsproto_) {  int _reset=0;\n", SYM(q2)->name, suffix);
 	Insertstr(q3, buf);
 	q = insertstr(q3, "{ int _counte = -1;\n");
 	sprintf(buf, "{ double* _savstate%d = (double*)_thread[_dith%d]._pval;\n\
