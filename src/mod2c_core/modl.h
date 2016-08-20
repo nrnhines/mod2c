@@ -238,6 +238,8 @@ extern Symbol
 					 * not already done. */
 #include "nmodlfunc.h"
 
+extern char suffix[];
+
 extern char     finname[],	/* the input file prefix */
                 buf[];		/* general purpose temporary buffer */
 

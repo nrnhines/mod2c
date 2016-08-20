@@ -186,9 +186,11 @@ static List *rangedep;
 static List *rangestate;
 static List *nrnpointers;
 static List* uip; /* void _update_ion_pointer(Datum* _ppvar){...} text */
-static char suffix[50];
+char suffix[50];
+extern char *modprefix;
 static char *rsuffix;	/* point process range and functions don't have suffix*/
 static char *mechname;
+static char* modbase;
 int point_process; /* 1 if a point process model */
 int artificial_cell; /* 1 if also explicitly declared an ARTIFICIAL_CELL */
 static int diamdec = 0;	/*1 if diam is declared*/
@@ -247,6 +249,26 @@ static Item* net_receive_block_open_brace_; /* the "{" line */
 */
 static int varcount, parraycount;
 
+void set_suffix() {
+	for (modbase = modprefix + strlen(modprefix); modbase != modprefix;
+	    modbase--) {
+		if (*modbase == '\\' || *modbase == '/') {
+			modbase++;
+			break;
+		}
+	}
+	if (!mechname) {
+		sprintf(suffix,"_%s", modbase);
+		mechname = modbase;
+	} else if (strcmp(mechname, "nothing") == 0) {
+		vectorize = 0;
+		suffix[0] = '\0';
+		mechname = modbase;
+	}else{
+		sprintf(suffix, "_%s", mechname);
+	}
+}
+
 void nrninit() {
 	extern int using_default_indep;
 	currents = newlist();
@@ -269,8 +291,6 @@ void parout() {
 	Item *q, *q1;
 	Symbol *s, *sion;
 	double d1, d2;
-	extern char *modprefix;
-	char *modbase;
 
 #if BBCORE
 	cvode_emit = 0;
@@ -292,23 +312,8 @@ void parout() {
 #endif
 	}
 
-	for (modbase = modprefix + strlen(modprefix); modbase != modprefix;
-	    modbase--) {
-		if (*modbase == '\\' || *modbase == '/') {
-			modbase++;
-			break;
-		}
-	}
-	if (!mechname) {
-		sprintf(suffix,"_%s", modbase);
-		mechname = modbase;
-	} else if (strcmp(mechname, "nothing") == 0) {
-		vectorize = 0;
-		suffix[0] = '\0';
-		mechname = modbase;
-	}else{
-		sprintf(suffix, "_%s", mechname);
-	}
+	set_suffix();	
+
 	if (artificial_cell && vectorize && (thread_data_index || toplocal_)) {
 fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specific data are not thread safe.\n");	
 		vectorize = 0;
@@ -1779,6 +1784,7 @@ void nrn_list(q1, q2)
 			point_process = 1;
 			artificial_cell = 1;
 		}
+		set_suffix();
 		break;
 	case ELECTRODE_CURRENT:
 		electrode_current = 1;
