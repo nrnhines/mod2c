@@ -782,12 +782,16 @@ void kinetic_implicit(fun, dt, mname)
 		Lappendsym(done_list1, fun);
 		Sprintf(buf, "static void* _sparseobj%d;\n", fun->u.i);
 		q = linsertstr(procfunc, buf);
-		Sprintf(buf, "extern void* nrn_cons_sparseobj%d(int(*)(void*, double*, _threadargsproto_), int, _Memb_list*, _threadargsproto_);\n", fun->u.i);
-		q = linsertstr(procfunc, buf);
 		sprintf(buf, "static int _spth%d = %d;\n", fun->u.i, thread_data_index++);
 		vectorize_substitute(q, buf);
 		sprintf(buf, "  _nrn_destroy_sparseobj_thread(_thread[_spth%d]._pvoid);\n", fun->u.i);
 		lappendstr(thread_cleanup_list, buf);
+#if 0
+		Sprintf(buf, "extern void* nrn_cons_sparseobj(int(*)(void*, double*, _threadargsproto_), int, _Memb_list*, _threadargsproto_);\n");
+#else
+		Sprintf(buf, "extern void* nrn_cons_sparseobj(int, int, _Memb_list*, _threadargsproto_);\n");
+#endif
+		linsertstr(procfunc, buf);
 	}
     }	
 	if (rlst->sens_parm) {

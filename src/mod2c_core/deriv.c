@@ -149,9 +149,13 @@ deriv2_advance);
 	}else{
 	  Sprintf(buf,
 	    "  if (!_thread[_spth%d]._pvoid) {\n"
+#if 0
 	    "    _thread[_spth%d]._pvoid = nrn_cons_sparseobj(%s, %d, _ml, _threadargs_);\n"
+#else
+	    "    _thread[_spth%d]._pvoid = nrn_cons_sparseobj(_kinetic_%s%s, %d, _ml, _threadargs_);\n"
+#endif
 	    "  }\n",
-	    listnum, listnum, fun->name, numeqn);
+	    listnum, listnum, fun->name, suffix, numeqn);
 	  lappendstr(newtonspace_list, buf);
 Sprintf(buf, "%s%s(&_sparseobj%d, %d, _slist%d, _dlist%d, _p, &%s, %s, %s\
 ,&_coef%d, _linmat%d);\n",
@@ -183,7 +187,7 @@ Sprintf(buf,
 "    #define _kinetic_%s%s 0\n"
 "  #endif\n"
 "  #pragma acc routine(%s%s_thread) seq\n"
-"  %s%s_thread(&_thread[_spth%d]._pvoid, %d, _slist%d, _dlist%d, &%s, %s, _kinetic_%s%s, _linmat%d, _threadargs_);\n",
+"  %s%s_thread(_thread[_spth%d]._pvoid, %d, _slist%d, _dlist%d, &%s, %s, _kinetic_%s%s, _linmat%d, _threadargs_);\n",
 fun->name, suffix, fun->name, suffix,
 ssprefix, method->name,
 ssprefix, method->name, listnum, numeqn, listnum, listnum, indepsym->name,
