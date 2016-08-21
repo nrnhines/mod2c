@@ -35,6 +35,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 static List *deriv_imp_list;	/* list of derivative blocks that were
 	translated in form suitable for the derivimplicit method */
+static List *deriv_imp_really; /* derivative blocks solved by derivimplicit */
 static char Derivimplicit[] = "derivimplicit";	
 
 extern Symbol *indepsym;
@@ -443,6 +444,15 @@ void add_deriv_imp_list(name)
 	Lappendstr(deriv_imp_list, name);
 }
 
+void add_deriv_imp_really(name)
+	char *name;
+{
+	if (!deriv_imp_really) {
+		deriv_imp_really = newlist();
+	}
+	Lappendstr(deriv_imp_really, name);
+}
+
 static List *deriv_used_list; /* left hand side derivatives of diffeqs */
 static List *deriv_state_list;	/* states of the derivative equations */
 
@@ -470,7 +480,7 @@ static int matchused = 0;	/* set when MATCH seen */
 void massagederiv(q1, q2, q3, q4, sensused)
 	Item *q1, *q2, *q3, *q4;
 {
-	int count = 0, deriv_implicit, solve_seen;
+	int count = 0, deriv_implicit, deriv_implicit_really, solve_seen;
 	char units[50];
 	Item *qs, *q, *mixed_eqns();
 	Symbol *s, *derfun, *state;
@@ -489,13 +499,21 @@ void massagederiv(q1, q2, q3, q4, sensused)
 		}
 	}
 
+	deriv_implicit_really = 0;
+	if (deriv_imp_really) ITERATE(q, deriv_imp_really) {
+		if (strcmp(derfun->name, STR(q)) == 0) {
+			deriv_implicit_really = 1;
+			break;
+		}
+	}
+
 	/* all this junk is still in the intoken list */
 	Sprintf(buf, "static inline int %s(_threadargsproto_);\n", SYM(q2)->name);
-	if (deriv_implicit == 1) {
+	if (deriv_implicit_really == 1) {
 	  Sprintf(buf, "extern int %s(_threadargsproto_);\n", SYM(q2)->name);
 	}
 	Linsertstr(procfunc, buf);
-	if (deriv_implicit == 1) {
+	if (deriv_implicit_really == 1) {
 	  replacstr(q1, "\nint"); q = insertstr(q3, "() {_reset=0;\n");
 	}else{
 	  replacstr(q1, "\nstatic int"); q = insertstr(q3, "() {_reset=0;\n");
