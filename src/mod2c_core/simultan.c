@@ -117,6 +117,22 @@ static int nonlin_common(q4, sensused)	/* used by massagenonlin() and mixed_eqns
 	Symbol *s;
 
 	using_array=0;
+
+	counts =0;
+	SYMITER_STAT {
+		if (s->used) {
+			if (s->subtype & ARRAY) {int dim = s->araydim;
+				counts += dim;
+			}else{
+				counts++;
+			}
+		}
+	}
+	Sprintf(buf, "_slist%d = (int*)malloc(sizeof(int)*%d);\n",
+	  numlist, counts);
+	Lappendstr(initlist, buf);
+
+	counts = 0;
 	SYMITER_STAT {
 		if (s->used) {
 			s->varnum = counts;
@@ -140,6 +156,9 @@ static int nonlin_common(q4, sensused)	/* used by massagenonlin() and mixed_eqns
 			}
 		}
 	}
+	Sprintf(buf, "#pragma acc update device(_slist%d[0:%d])\n\n",
+	  numlist, counts);
+	Lappendstr(initlist, buf);
 
 	ITERATE(lq, eqnq) {
 		char *eqtype = SYM(ITM(lq))->name;
@@ -179,8 +198,11 @@ Sprintf(buf, "if(_counte != %d) printf( \"Number of equations, %%d,\
 Sprintf(buf, "static int _slist%d[%d]; static double _dlist%d[%d];\n",
 numlist, counts*(1 + sens_parm), numlist, counts);
 	q = linsertstr(procfunc, buf);
-Sprintf(buf, "static int _slist%d[%d];\n",
-numlist, counts*(1 + sens_parm));
+	Sprintf(buf,
+	  "\n#define _slist%d _slist%d%s\n"
+	  "int* _slist%d;\n"
+	  "#pragma acc declare create(_slist%d)\n"
+	  , numlist, numlist, suffix, numlist, numlist);
 	vectorize_substitute(q, buf);	
 	return counts;
 }
@@ -210,7 +232,7 @@ numlist, numlist-1, counts);
 		counts, numlist, SYM(q2)->name, suffix, numlist);
 	qret = insertstr(q3, buf);
 	Sprintf(buf, 
-	  "#pragma add routine(nrn_newton_thread) seq\n"
+	  "#pragma acc routine(nrn_newton_thread) seq\n"
 #if 0
 	  "_reset = nrn_newton_thread(_newtonspace%d, %d,_slist%d, _cb_%s%s, _dlist%d,  _threadargs_);\n"
 #else
@@ -218,7 +240,7 @@ numlist, numlist-1, counts);
 #endif
 	  , numlist-1, counts, numlist, SYM(q2)->name, suffix, numlist);
 	vectorize_substitute(qret, buf);
-	Insertstr(q3, "if(_reset) {abort_run(_reset);}}\n");
+	Insertstr(q3, "/*if(_reset) {abort_run(_reset);}*/ }\n");
 	Sprintf(buf,
 	  "extern int _cb_%s%s(_threadargsproto_);\n"
 	  , SYM(q2)->name, suffix);

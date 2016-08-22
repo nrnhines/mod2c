@@ -456,9 +456,17 @@ Sprintf(buf, "{int _reset=0;\n");
 		diag("KINETIC contains no reactions", (char *)0);
 	}
 	fun->used = count;
-	Sprintf(buf, "static int _slist%d[%d], _dlist%d[%d]; static double *_temp%d;\n",
-		numlist, count*(1 + sens_parm), numlist,
-		count*(1 + sens_parm), numlist);
+	Sprintf(buf,
+	  "\n#define _slist%d _slist%d%s\n"
+	  "int* _slist%d;\n"    
+	  "#pragma acc declare create(_slist%d)\n"
+	  "\n#define _dlist%d _dlist%d%s\n"
+	  "int* _dlist%d;\n"   
+	  "#pragma acc declare create(_dlist%d)\n"
+	  , numlist, numlist, suffix, numlist, numlist
+	  , numlist, numlist, suffix, numlist, numlist
+	  );
+
 	Linsertstr(procfunc, buf);
 	insertstr(q4, "  } return _reset;\n");
 	movelist(q1, q4, procfunc);
@@ -970,7 +978,10 @@ Insertstr(rlst->position, "}");
 		Sprintf(buf,"extern double *_getelm();\n");
 		qv = linsertstr(procfunc, buf);
 #if VECTORIZE
-		Sprintf(buf,"extern double *_nrn_thread_getelm(void*, int, int, int);\n");
+		Sprintf(buf,
+		  "\n#pragma acc routine seq\n"
+		  "extern double *_nrn_thread_getelm(void*, int, int, int);\n"
+		  );
 		vectorize_substitute(qv, buf);
 #endif
 	}}
@@ -1201,7 +1212,7 @@ static void kinlist(fun, rlst)
 	Symbol *fun;
 	Rlist *rlst;
 {
-	int i;
+	int i, count;
 	Symbol *s;
 	Item* qv;
 	
@@ -1210,6 +1221,22 @@ static void kinlist(fun, rlst)
 	}
 	rlst->slist_decl = 1;
 	/* put slist and dlist in initlist */
+
+	count = 0;
+	for (i=0; i < rlst->nsym; i++) {
+		s = rlst->symorder[i];
+		if (s->subtype & ARRAY) { int dim = s->araydim;
+			count += dim;
+		}else{
+			count++;
+		}
+	}
+	Sprintf(buf,
+	  "\n _slist%d = (int*)malloc(sizeof(int)*%d);\n"
+	  " _dlist%d = (int*)malloc(sizeof(int)*%d);\n"
+	  , fun->u.i, count, fun->u.i, count);
+	Lappendstr(initlist, buf);
+
 	for (i=0; i < rlst->nsym; i++) {
 		s = rlst->symorder[i];
 #if CVODE
@@ -1260,6 +1287,12 @@ if (vectorize){
 }
 		s->used = 0;
 	}
+	Sprintf(buf,
+	 "#pragma acc update device(_slist%d[0:%d])\n"
+	 " #pragma acc update device(_dlist%d[0:%d])\n\n"
+	 , fun->u.i, count, fun->u.i, count);
+	Lappendstr(initlist, buf);
+
 }
 
 /* for now we only check CONSERVE and COMPARTMENT */

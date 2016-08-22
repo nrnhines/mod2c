@@ -1111,8 +1111,13 @@ unitdef: unit '=' unit
 	;
 factordef: NAME '=' real unit
 		{ SYM($1)->subtype |= nmodlCONST;
-		  Sprintf(buf, "static double %s = %s;\n", SYM($1)->name,
-			STR($3));
+		  Sprintf(buf,
+			"\n#define %s %s%s\n"
+			"double %s = %s;\n"
+			"#pragma acc declare copyin(%s)\n\n"
+			, SYM($1)->name, SYM($1)->name, suffix
+			, SYM($1)->name, STR($3)
+			, SYM($1)->name);
 		  Lappendstr(firstlist, buf);
 		}
 	| NAME '=' unit unit
