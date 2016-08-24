@@ -46,6 +46,7 @@ extern Item* protect_astmt(Item*, Item*);
 extern List* toplocal_;
 static List* toplocal1_;
 extern List *firstlist; /* NAME symbols in order that they appear in file */
+extern List* units_def_for_acc; /* might not be a SUFFIX when declared */
 extern int lexcontext; /* ':' can return 3 different tokens */
 extern List *solveforlist; /* List of symbols that are actually to be solved
 				for in a block. See in_solvefor() */
@@ -1111,31 +1112,32 @@ unitdef: unit '=' unit
 	;
 factordef: NAME '=' real unit
 		{ SYM($1)->subtype |= nmodlCONST;
-		  Sprintf(buf,
-			"\n#define %s %s%s\n"
-			"double %s = %s;\n"
-			"#pragma acc declare copyin(%s)\n\n"
-			, SYM($1)->name, SYM($1)->name, suffix
-			, SYM($1)->name, STR($3)
-			, SYM($1)->name);
+		  Lappendstr(units_def_for_acc, SYM($1)->name);
+		  Sprintf(buf, "\ndouble %s = %s;\n"
+			"#pragma acc declare copyin(%s)\n"
+			, SYM($1)->name, STR($3), SYM($1)->name);
 		  Lappendstr(firstlist, buf);
 		}
 	| NAME '=' unit unit
 		{Item *q; double d, unit_mag();
+		    Lappendstr(units_def_for_acc, SYM($1)->name);
 		    Unit_push($3);
 			Unit_push($4); unit_div();
 		    SYM($1)->subtype |= nmodlCONST;
-		    Sprintf(buf, "static double %s = %g;\n", SYM($1)->name,
-			unit_mag());
+		    Sprintf(buf, "\ndouble %s = %g;\n"
+			"#pragma acc declare copyin(%s)\n"
+			, SYM($1)->name, unit_mag(), SYM($1)->name);
 		    Lappendstr(firstlist, buf);
 		    unit_pop();
 		}
 	| NAME '=' unit '-' GT unit 
 		{ double unit_mag();
+		    Lappendstr(units_def_for_acc, SYM($1)->name);
 		    Unit_push($3); Unit_push($6); unit_div();
 		    SYM($1)->subtype |= nmodlCONST;
-		    Sprintf(buf, "static double %s = %g;\n", SYM($1)->name,
-			unit_mag());
+		    Sprintf(buf, "\n double %s = %g;\n"
+			"#pragma acc declare copyin(%s)\n"
+			, SYM($1)->name, unit_mag(), SYM($1)->name);
 		    Lappendstr(firstlist, buf);
 		    unit_pop();
 		}

@@ -149,6 +149,7 @@ extern int check_tables_threads(List*);
 List *syminorder;
 List *plotlist;
 List *defs_list;
+List *units_def_for_acc;
 int electrode_current = 0;
 int thread_data_index = 0;
 List *thread_cleanup_list;
@@ -516,6 +517,11 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 		}
 	}
 #endif
+	ITERATE(q, units_def_for_acc) {
+		Sprintf(buf, "#define %s %s%s\n", STR(q), STR(q), suffix);
+		Lappendstr(defs_list, buf);
+	}
+
 	Lappendstr(defs_list, "/* external NEURON variables */\n");
 	SYMLISTITER {
 		s = SYM(q);
