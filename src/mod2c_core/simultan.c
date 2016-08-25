@@ -156,7 +156,7 @@ static int nonlin_common(q4, sensused)	/* used by massagenonlin() and mixed_eqns
 			}
 		}
 	}
-	Sprintf(buf, "#pragma acc update device(_slist%d[0:%d])\n\n",
+	Sprintf(buf, "#pragma acc enter data copyin(_slist%d[0:%d])\n\n",
 	  numlist, counts);
 	Lappendstr(initlist, buf);
 

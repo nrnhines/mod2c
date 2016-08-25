@@ -459,10 +459,10 @@ Sprintf(buf, "{int _reset=0;\n");
 	Sprintf(buf,
 	  "\n#define _slist%d _slist%d%s\n"
 	  "int* _slist%d;\n"    
-	  "#pragma acc declare create(_slist%d)\n"
+	  "#pragma acc enter data copyin(_slist%d)\n"
 	  "\n#define _dlist%d _dlist%d%s\n"
 	  "int* _dlist%d;\n"   
-	  "#pragma acc declare create(_dlist%d)\n"
+	  "#pragma acc enter data copyin(_dlist%d)\n"
 	  , numlist, numlist, suffix, numlist, numlist
 	  , numlist, numlist, suffix, numlist, numlist
 	  );

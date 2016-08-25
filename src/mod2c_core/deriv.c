@@ -597,8 +597,8 @@ if (s->subtype & ARRAY) { int dim = s->araydim;
 	}
 
 	Sprintf(buf,
-	  "#pragma acc update device(_slist%d[0:%d])\n"
-	  " #pragma acc update device(_dlist%d[0:%d])\n\n"
+	  "#pragma acc enter data copyin(_slist%d[0:%d])\n"
+	  " #pragma acc enter data copyin(_dlist%d[0:%d])\n\n"
 	  , numlist, count, numlist, count);
 	Lappendstr(initlist, buf);
 
