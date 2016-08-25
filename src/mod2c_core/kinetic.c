@@ -1288,8 +1288,8 @@ if (vectorize){
 		s->used = 0;
 	}
 	Sprintf(buf,
-	 "#pragma acc update device(_slist%d[0:%d])\n"
-	 " #pragma acc update device(_dlist%d[0:%d])\n\n"
+	 "#pragma acc enter data copyin(_slist%d[0:%d])\n"
+	 " #pragma acc enter data copyin(_dlist%d[0:%d])\n\n"
 	 , fun->u.i, count, fun->u.i, count);
 	Lappendstr(initlist, buf);
 
