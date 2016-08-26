@@ -561,9 +561,14 @@ Sprintf(buf, "static void _hoc_%s(void);\n", s->name);
 	Lappendstr(defs_list, "\n#endif /*BBCORE*/\n");
 #endif
 
-	Lappendstr(defs_list, "static int _mechtype;\n");
+	q = lappendstr(defs_list, "static int _mechtype;\n");
 	if (net_send_seen_ && !artificial_cell) {
-		Lappendstr(defs_list, "#pragma acc declare copyin (_mechtype)\n");
+		Sprintf(buf,
+		  "\n#define _mechtype _mechtype%s\n"
+		  "int _mechtype;\n"
+		  "#pragma acc declare copyin (_mechtype)\n"
+		  , suffix);
+		replacstr(q, buf);
 	}
 	Lappendstr(defs_list, "\
 extern int nrn_get_mechtype();\n\
