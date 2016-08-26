@@ -130,8 +130,19 @@ if (deriv_imp_list) {	/* make sure deriv block translation matches method */
           "  if (!_newtonspace%d) {\n"
           "    _newtonspace%d = nrn_cons_newtonspace(%d, _cntml_padded);\n"
           "    _thread[_dith%d]._pval = makevector(2*%d*_cntml_padded*sizeof(double));\n"
-          "  }\n",
-          listnum, listnum, numeqn, listnum, numeqn);
+	  "    #ifdef _OPENACC\n"
+	  "    if (_nt->compute_gpu) {\n"
+	  "      void* _d_ns = (void*)acc_deviceptr(_newtonspace%d);\n"
+	  "      double* _d_pd = (double*)acc_copyin(_thread[_dith%d]._pval,2*%d*_cntml_padded* sizeof(double));\n"
+	  "      ThreadDatum* _d_td = (ThreadDatum*)acc_deviceptr(_thread);\n"
+	  "      acc_memcpy_to_device(&(_d_td[%d]._pvoid), &_d_ns, sizeof(void*));\n"
+	  "      acc_memcpy_to_device(&(_d_td[_dith%d]._pval), &_d_pd, sizeof(double*));\n"
+	  "    }\n"
+	  "    #endif\n"
+          "  }\n"
+          , listnum, listnum, numeqn, listnum, numeqn
+	  , listnum, listnum, numeqn, thread_data_index+1, listnum
+	  );
 	lappendstr(newtonspace_list, buf);
 	Sprintf(buf, "  free((void*)(_thread[_dith%d]._pval));\n", listnum);
 	lappendstr(thread_cleanup_list, buf);
@@ -149,13 +160,18 @@ deriv2_advance);
 	}else{
 	  Sprintf(buf,
 	    "  if (!_thread[_spth%d]._pvoid) {\n"
-#if 0
-	    "    _thread[_spth%d]._pvoid = nrn_cons_sparseobj(%s, %d, _ml, _threadargs_);\n"
-#else
 	    "    _thread[_spth%d]._pvoid = nrn_cons_sparseobj(_kinetic_%s%s, %d, _ml, _threadargs_);\n"
-#endif
-	    "  }\n",
-	    listnum, listnum, fun->name, suffix, numeqn);
+	    "    #ifdef _OPENACC\n"
+	    "    if (_nt->compute_gpu) {\n"
+	    "      void* _d_so = (void*) acc_deviceptr(_thread[_spth%d]._pvoid);\n"
+	    "      ThreadDatum* _d_td = (ThreadDatum*)acc_deviceptr(_thread);\n"
+	    "      acc_memcpy_to_device(&(_d_td[_spth%d]._pvoid), &_d_so, sizeof(void*));\n"
+	    "    }\n"
+	    "    #endif\n"
+	    "  }\n"
+	    , listnum, listnum, fun->name, suffix, numeqn
+	    , listnum, listnum
+	    );
 	  lappendstr(newtonspace_list, buf);
 Sprintf(buf, "%s%s(&_sparseobj%d, %d, _slist%d, _dlist%d, _p, &%s, %s, %s\
 ,&_coef%d, _linmat%d);\n",
