@@ -146,6 +146,7 @@ extern List	*symlist[];
 extern List* ldifuslist;
 extern char finname[];
 extern int check_tables_threads(List*);
+List* acc_present_list;
 List *syminorder;
 List *plotlist;
 List *defs_list;
@@ -1277,12 +1278,15 @@ extern void _cvode_abstol( Symbol**, double*, int);\n\n\
 		}
 	}
 	if (vectorize) {
+		insertstr(extra_pragma_loop_arg, "\n#define _thread_present_ /**/");
 		if (thread_data_index) {
-			sprintf(buf, "\n#define _thread_present_ , _thread[0:%d]\n", thread_data_index);
-		}else{
-			sprintf(buf, "\n#define _thread_present_ /**/\n");
+			sprintf(buf, ", _thread[0:%d]", thread_data_index);
+			insertstr(extra_pragma_loop_arg, buf);
 		}
-		insertstr(extra_pragma_loop_arg, buf);
+		ITERATE(q, acc_present_list) {
+			insertstr(extra_pragma_loop_arg, STR(q));
+		}
+		insertstr(extra_pragma_loop_arg, "\n");
 	}
 #endif
 #if !BBCORE

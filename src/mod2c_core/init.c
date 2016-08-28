@@ -275,6 +275,7 @@ void init()
 	constructorfunc = newlist();
 	destructorfunc = newlist();
 	units_def_for_acc = newlist();
+	acc_present_list = newlist();
 #if NMODL
 	nrninit();
 #endif

@@ -456,6 +456,9 @@ Sprintf(buf, "{int _reset=0;\n");
 		diag("KINETIC contains no reactions", (char *)0);
 	}
 	fun->used = count;
+	Sprintf(buf, ", _slist%d[0:%d], _dlist%d[0:%d]",
+	  numlist, count, numlist, count);
+	Lappendstr(acc_present_list, buf);
 	Sprintf(buf,
 	  "\n#define _slist%d _slist%d%s\n"
 	  "int* _slist%d;\n"    

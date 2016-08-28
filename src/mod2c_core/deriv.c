@@ -631,6 +631,9 @@ if (s->subtype & ARRAY) { int dim = s->araydim;
 		diag("DERIVATIVE contains no derivatives", (char *)0);
 	}
 	derfun->used = count;
+	Sprintf(buf, ", _slist%d[0:%d], _dlist%d[0:%d]",
+	  numlist, count, numlist, count);
+	Lappendstr(acc_present_list, buf);
 	Sprintf(buf,
 
 	  "\n#define _slist%d _slist%d%s\n"

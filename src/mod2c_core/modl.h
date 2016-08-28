@@ -253,6 +253,7 @@ extern List
 		*procfunc,
 		*initlist,
 		*firstlist,
+		*acc_present_list,
 		*plotlist;
 
 extern FILE
