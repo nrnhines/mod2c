@@ -186,15 +186,20 @@ Sprintf(buf,
 "  #if !defined(_derivimplic_%s%s)\n"
 "    #define _derivimplic_%s%s 0\n"
 "  #endif\n"
-"  #pragma acc routine(%s%s_thread) seq\n"
 "  %s%s_thread(%d, _slist%d, _dlist%d, _derivimplic_%s%s, _threadargs_);\n"
 "%s",
 deriv1_advance,
 fun->name, suffix, fun->name, suffix,
-ssprefix, method->name, ssprefix, method->name,
+ssprefix, method->name,
 numeqn, listnum, listnum, fun->name, suffix,
 deriv2_advance);
 	vectorize_substitute(qsol, buf);
+	Sprintf(buf,
+	  "\n"
+	  "#pragma acc routine seq\n"
+	  "extern int %s%s_thread(int, int*, int*, int, _threadargsproto_);\n"
+	  , ssprefix, method->name);
+	linsertstr(procfunc, buf);
 	}else{ /* kinetic */
    if (vectorize) {
 Sprintf(buf,
@@ -202,13 +207,17 @@ Sprintf(buf,
 "  #if !defined(_kinetic_%s%s)\n"
 "    #define _kinetic_%s%s 0\n"
 "  #endif\n"
-"  #pragma acc routine(%s%s_thread) seq\n"
 "  %s%s_thread(_thread[_spth%d]._pvoid, %d, _slist%d, _dlist%d, &%s, %s, _kinetic_%s%s, _linmat%d, _threadargs_);\n",
 fun->name, suffix, fun->name, suffix,
-ssprefix, method->name,
 ssprefix, method->name, listnum, numeqn, listnum, listnum, indepsym->name,
 dindepname, fun->name, suffix, listnum);
 	vectorize_substitute(qsol, buf);
+	Sprintf(buf,
+	  "\n"
+	  "#pragma acc routine seq\n"
+	  "extern int %s%s_thread(void*, int, int*, int*, double*, double, int, int, _threadargsproto_);\n"
+	  , ssprefix, method->name);
+	linsertstr(procfunc, buf);
    }
 #endif
 	}
