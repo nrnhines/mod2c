@@ -52,6 +52,7 @@ extern int watch_seen_;
 
 int protect_;
 int protect_include_;
+int net_send_buffer_in_initial;
 extern Item* vectorize_replacement_item(Item*);
 extern int artificial_cell;
 extern int vectorize;
@@ -1121,6 +1122,7 @@ Fprintf(stderr, "Notice: Use of state_discontinuity in a NET_RECEIVE block is un
 acc_net_add(qname, qpar1, qexpr, qpar2, "0, _tqitem, _weight_index, _ppvar[1*_STRIDE],", "");
 				Insertstr(qpar1->next, "_tqitem, _weight_index, _pnt,");
 			}else if (blocktype == INITIAL1){
+			  net_send_buffer_in_initial = 1;
 acc_net_add(qname, qpar1, qexpr, qpar2, "0, _tqitem, 0, _ppvar[1*_STRIDE],", "");
 				Insertstr(qpar1->next, "_tqitem, -1, _nt->_vdata[_ppvar[1*_STRIDE]],");
 			}else{
