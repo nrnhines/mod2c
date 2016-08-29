@@ -778,17 +778,17 @@ void c_out_vectorize(const char* prefix)
 
   if (net_send_buffer_in_initial && !artificial_cell) {
     P("\
+\n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
 \n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
 \n  #pragma acc wait(stream_id)\
 \n  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)\
-\n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
 \n  update_net_send_buffer_on_host(_nt, _nsb);\
-\n#endif\
 \n  for (int _i=0; _i < _nsb->_cnt; ++_i) {\
 \n    net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],\
 \n      _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],\
 \n      _nsb->_nsb_t[_i], _nsb->_nsb_flag[_i]);\
 \n  }\
+\n#endif\
 \n");
         }
 
