@@ -4,6 +4,8 @@
 MOD2C is NMODL to C adapted for [CoreNEURON simulator](https://github.com/BlueBrain/CoreNEURON).
 More information about NMODL can be found [here](https://www.neuron.yale.edu/neuron/static/docs/refman/nocmodl.html).
 
+This version supports GPU code generation using OpenACC.
+
 # Requirements
 * [CMake 2.8.9+](https://cmake.org/)
 * [Flex](http://flex.sourceforge.net)
