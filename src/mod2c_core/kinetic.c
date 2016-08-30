@@ -799,7 +799,7 @@ for(_i=%d;_i<%d;_i++){\n",
 #endif
     NOT_CVODE_FLAG {
 	Sprintf(buf, "\
-	_RHS%d(_i) = -_dt1*(_p[_slist%d[_i]] - _p[_dlist%d[_i]]);\n\
+	_RHS%d(_i) = -_dt1*(_p[_slist%d[_i]*_STRIDE] - _p[_dlist%d[_i]*_STRIDE]);\n\
 	_MATELM%d(_i, _i) = _dt1;\n",
 		fun->u.i, fun->u.i, fun->u.i, fun->u.i);
 	qv = insertstr(rlst->position, buf);

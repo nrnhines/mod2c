@@ -148,15 +148,15 @@ dindepname, fun->name, listnum, listnum);
 	replacstr(qsol, buf);
 #if VECTORIZE
 	if (method->subtype & DERF) { /* derivimplicit */
-Sprintf(buf,"%s %s%s_thread(%d, _slist%d, _dlist%d, _p, %s, _ppvar, _thread, _nt);\n%s",
+Sprintf(buf,"%s %s%s_thread(%d, _slist%d, _dlist%d, %s, _threadargs_);\n%s",
 deriv1_advance, ssprefix, method->name,
 numeqn, listnum, listnum, fun->name,
 deriv2_advance);
 	vectorize_substitute(qsol, buf);
 	}else{ /* kinetic */
    if (vectorize) {
-Sprintf(buf, "%s%s_thread(&_thread[_spth%d]._pvoid, %d, _slist%d, _dlist%d, _p, &%s, %s, %s\
-, _linmat%d, _ppvar, _thread, _nt);\n",
+Sprintf(buf, "%s%s_thread(&_thread[_spth%d]._pvoid, %d, _slist%d, _dlist%d, &%s, %s, %s\
+, _linmat%d, _threadargs_);\n",
 ssprefix, method->name, listnum, numeqn, listnum, listnum, indepsym->name,
 dindepname, fun->name, listnum);
 	vectorize_substitute(qsol, buf);
@@ -613,11 +613,11 @@ if (_deriv%d_advance) {\n", count, numlist);
 		q = insertsym(q4, sp);
 		eqnqueue(q);
 Sprintf(buf,
-"_p[_dlist%d[_id]] - (_p[_slist%d[_id]] - _savstate%d[_id])/d%s;\n",
+"_p[_dlist%d[_id]*_STRIDE] - (_p[_slist%d[_id]*_STRIDE] - _savstate%d[_id])/d%s;\n",
    numlist, numlist, numlist, indepsym->name);
 		Insertstr(q4, buf);
 Sprintf(buf,
-"}else{\n_dlist%d[++_counte] = _p[_slist%d[_id]] - _savstate%d[_id];}}}\n",
+"}else{\n_dlist%d[++_counte] = _p[_slist%d[_id]*_STRIDE] - _savstate%d[_id];}}}\n",
    numlist+1, numlist, numlist);
 		Insertstr(q4, buf);
 	}else{
@@ -631,7 +631,7 @@ Sprintf(buf,
 	q = mixed_eqns(q2, q3, q4); /* numlist now incremented */
 	if (deriv_implicit) {
 		Sprintf(buf,
-"{int _id; for(_id=0; _id < %d; _id++) { _savstate%d[_id] = _p[_slist%d[_id]];}}\n",
+"{int _id; for(_id=0; _id < %d; _id++) { _savstate%d[_id] = _p[_slist%d[_id]*_STRIDE];}}\n",
 		count, derfun->u.i, derfun->u.i);
 		Insertstr(q, buf);
 	}
