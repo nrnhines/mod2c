@@ -2877,15 +2877,10 @@ void emit_net_receive_buffering_code() {
 \n  if (!_nt->_ml_list) { return; }\
 \n  _Memb_list* _ml = _nt->_ml_list[_mechtype];\
 \n  if (!_ml) { return; }\
-\n  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer;");
+\n  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer;\
+");
 	insertstr(q, buf);
-	if (net_send_seen_ || net_event_seen_) {
-	    sprintf(buf, "\
-\n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
-\n  _nsb->_cnt = 0;\
-\n  #pragma acc update device(_nsb->_cnt) if(_nt->compute_gpu)");
-	    insertstr(q, buf);
-    }
+
 sprintf(buf, "\
 \n  int _i, _j, _k;\
 \n  double _nrt, _nrflag;\
@@ -2900,6 +2895,7 @@ sprintf(buf, "\
 \n    _nrflag = _nrb->_nrb_flag[_i];\
 \n    _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);\
 \n  }\
+\n  #pragma acc wait(stream_id)\
 \n  _nrb->_cnt = 0;\
 \n  /*printf(\"_net_buf_receive_%s  %%d\\n\", _nt->_id);*/\
 \n", suffix);
@@ -2907,9 +2903,9 @@ sprintf(buf, "\
 
 	if (net_send_seen_ || net_event_seen_) {
 		sprintf(buf, "\
-\n  #pragma acc wait(stream_id)\
-\n  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)\
+\n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
 \n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
+\n  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)\
 \n  update_net_send_buffer_on_host(_nt, _nsb);\
 \n#endif\
 \n  for (_i=0; _i < _nsb->_cnt; ++_i) {\
@@ -2917,6 +2913,10 @@ sprintf(buf, "\
 \n      _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],\
 \n      _nsb->_nsb_t[_i], _nsb->_nsb_flag[_i]);\
 \n  }\
+\n  _nsb->_cnt = 0;\
+\n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
+\n  #pragma acc update device(_nsb->_cnt) if (_nt->compute_gpu)\
+\n#endif\
 \n");
 		insertstr(q, buf);
 	}
