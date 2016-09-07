@@ -60,6 +60,7 @@ static void cvode_diffeq();
 static List* cvode_diffeq_list, *cvode_eqn;
 static int cvode_cnexp_possible;
 #endif
+int derivimplic_listnum;
 
 void solv_diffeq(qsol, fun, method, numeqn, listnum, steadystate, btype)
 	Item *qsol;
@@ -68,7 +69,6 @@ void solv_diffeq(qsol, fun, method, numeqn, listnum, steadystate, btype)
 	int btype;
 {
 	char *maxerr_str, dindepname[50];
-	char deriv1_advance[30], deriv2_advance[30];
 	char ssprefix[8];
 	
 	if (method && strcmp(method->name, "cnexp") == 0) {
@@ -115,9 +115,8 @@ if (deriv_imp_list) {	/* make sure deriv block translation matches method */
  precede the DERIVATIVE block\n",
 " and all SOLVEs using that block must use the derivimplicit method\n");
 	}
-	Sprintf(deriv1_advance, "_deriv%d_advance = 1;\n", listnum);
-	Sprintf(deriv2_advance, "_deriv%d_advance = 0;\n", listnum);
-	Sprintf(buf, "static int _deriv%d_advance = 0;\n", listnum);
+	derivimplic_listnum = listnum;	
+	Sprintf(buf, "static int _deriv%d_advance = 1;\n", listnum);
 	q = linsertstr(procfunc, buf);
 	Sprintf(buf, "\n#define _deriv%d_advance _thread[%d]._i\n\
 #define _dith%d %d\n#define _newtonspace%d _thread[%d]._pvoid\nextern void* nrn_cons_newtonspace(int, int);\n\
@@ -149,14 +148,11 @@ if (deriv_imp_list) {	/* make sure deriv block translation matches method */
 	Sprintf(buf, "  nrn_destroy_newtonspace(_newtonspace%d);\n", listnum);
 	lappendstr(thread_cleanup_list, buf);
 	thread_data_index += 3;
-}else{
-	Strcpy(deriv1_advance, "");
-	Strcpy(deriv2_advance, "");
 }
-Sprintf(buf,"%s %s%s(_ninits, %d, _slist%d, _dlist%d, _p, &%s, %s, %s, &_temp%d%s);\n%s",
-deriv1_advance, ssprefix,
-method->name, numeqn, listnum, listnum, indepsym->name, dindepname, fun->name, listnum, maxerr_str,
-deriv2_advance);
+Sprintf(buf," %s%s(_ninits, %d, _slist%d, _dlist%d, _p, &%s, %s, %s, &_temp%d%s);",
+ssprefix,
+method->name, numeqn, listnum, listnum, indepsym->name, dindepname,
+fun->name, listnum, maxerr_str);
 	}else{
 	  Sprintf(buf,
 	    "  if (!_thread[_spth%d]._pvoid) {\n"
@@ -182,17 +178,14 @@ dindepname, fun->name, listnum, listnum);
 #if VECTORIZE
 	if (method->subtype & DERF) { /* derivimplicit */
 Sprintf(buf,
-"%s"
+"\n"
 "  #if !defined(_derivimplic_%s%s)\n"
 "    #define _derivimplic_%s%s 0\n"
 "  #endif\n"
-"  %s%s_thread(%d, _slist%d, _dlist%d, _derivimplic_%s%s, _threadargs_);\n"
-"%s",
-deriv1_advance,
+"  %s%s_thread(%d, _slist%d, _dlist%d, _derivimplic_%s%s, _threadargs_);\n",
 fun->name, suffix, fun->name, suffix,
 ssprefix, method->name,
-numeqn, listnum, listnum, fun->name, suffix,
-deriv2_advance);
+numeqn, listnum, listnum, fun->name, suffix);
 	vectorize_substitute(qsol, buf);
 	Sprintf(buf,
 	  "\n"

@@ -63,6 +63,7 @@ extern int	net_receive_;
 extern int	net_send_seen_;
 extern int	debugging_;
 extern int	point_process;
+extern int	derivimplic_listnum;
 
 #if CVODE
 extern Symbol* cvode_nrn_cur_solve_;
@@ -743,6 +744,18 @@ void c_out_vectorize(const char* prefix)
 	  P("_cntml_actual = _ml->_nodecount;\n");
 	  P("_cntml_padded = _ml->_nodecount_padded;\n");
 	  P("_thread = _ml->_thread;\n");
+	if (derivimplic_listnum) {
+	  sprintf(buf,
+	  "  #ifdef _OPENACC\n"
+	  "  if (_nt->compute_gpu) {\n"
+	  "    int _i = 1;\n"
+	  "    ThreadDatum* _thread = (ThreadDatum*)acc_deviceptr(_ml->_thread);\n"
+	  "    acc_memcpy_to_device(&_deriv%d_advance, &_i, sizeof(int));\n"
+	  "  }\n"
+	  "  #endif\n"
+	  , derivimplic_listnum);
+ 	  P(buf);
+	}
 	  if (net_send_seen_ && !artificial_cell) {
 	    P("  #pragma acc update device (_mechtype) if(_nt->compute_gpu)\n");
 	  }
@@ -764,7 +777,6 @@ void c_out_vectorize(const char* prefix)
 
 	 pr_layout_for_p(1, NRN_INIT);
 
-
 	check_tables();
 	if (debugging_ && net_receive_) {
 		P(" _tsav = -1e20;\n");
@@ -774,7 +786,21 @@ void c_out_vectorize(const char* prefix)
 	printlist(get_ion_variables(1));
 	P(" initmodel(_threadargs_);\n");
 	printlist(set_ion_variables(2));
+
 	P("}\n");
+
+	if (derivimplic_listnum) {
+	  sprintf(buf,
+	  "  #ifdef _OPENACC\n"
+	  "  if (_nt->compute_gpu) {\n"
+	  "    int _i = 1;\n"
+	  "    ThreadDatum* _thread = (ThreadDatum*)acc_deviceptr(_ml->_thread);\n"
+	  "    acc_memcpy_to_device(&_deriv%d_advance, &_i, sizeof(int));\n"
+	  "  }\n"
+	  "  #endif\n"
+	  , derivimplic_listnum);
+	  P(buf);
+	}
 
   if (net_send_buffer_in_initial && !artificial_cell) {
     P("\
