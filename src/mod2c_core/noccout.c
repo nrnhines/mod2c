@@ -746,14 +746,11 @@ void c_out_vectorize(const char* prefix)
 	  P("_thread = _ml->_thread;\n");
 	if (derivimplic_listnum) {
 	  sprintf(buf,
+	  "  _deriv%d_advance = 0;\n"
 	  "  #ifdef _OPENACC\n"
-	  "  if (_nt->compute_gpu) {\n"
-	  "    int _i = 1;\n"
-	  "    ThreadDatum* _thread = (ThreadDatum*)acc_deviceptr(_ml->_thread);\n"
-	  "    acc_memcpy_to_device(&_deriv%d_advance, &_i, sizeof(int));\n"
-	  "  }\n"
+	  "  #pragma acc update device (_deriv%d_advance) if (_nt->compute_gpu)\n"
 	  "  #endif\n"
-	  , derivimplic_listnum);
+	  , derivimplic_listnum, derivimplic_listnum);
  	  P(buf);
 	}
 	  if (net_send_seen_ && !artificial_cell) {
@@ -791,15 +788,12 @@ void c_out_vectorize(const char* prefix)
 
 	if (derivimplic_listnum) {
 	  sprintf(buf,
+	  "  _deriv%d_advance = 1;\n"
 	  "  #ifdef _OPENACC\n"
-	  "  if (_nt->compute_gpu) {\n"
-	  "    int _i = 1;\n"
-	  "    ThreadDatum* _thread = (ThreadDatum*)acc_deviceptr(_ml->_thread);\n"
-	  "    acc_memcpy_to_device(&_deriv%d_advance, &_i, sizeof(int));\n"
-	  "  }\n"
+	  "  #pragma acc update device (_deriv%d_advance) if (_nt->compute_gpu)\n"
 	  "  #endif\n"
-	  , derivimplic_listnum);
-	  P(buf);
+	  , derivimplic_listnum, derivimplic_listnum);
+ 	  P(buf);
 	}
 
   if (net_send_buffer_in_initial && !artificial_cell) {
