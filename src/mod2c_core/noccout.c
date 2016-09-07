@@ -784,11 +784,12 @@ void c_out_vectorize(const char* prefix)
 \n  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)\
 \n  update_net_send_buffer_on_host(_nt, _nsb);\
 \n#endif\
-\n  for (int _i=0; _i < _nsb->_cnt; ++_i) {\
+\n  {int _i;\
+\n  for (_i=0; _i < _nsb->_cnt; ++_i) {\
 \n    net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],\
 \n      _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],\
 \n      _nsb->_nsb_t[_i], _nsb->_nsb_flag[_i]);\
-\n  }\
+\n  }}\
 \n  _nsb->_cnt = 0;\
 \n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
 \n  #pragma acc update device(_nsb->_cnt) if(_nt->compute_gpu)\
