@@ -78,6 +78,7 @@ void nrn_list();
 void bablk();
 void nrn_use();
 void nrn_var_assigned();
+void nrn_assign_netreceive(Item*, Item*, Item*);
 void slist_data();
 void out_nt_ml_frag();
 void cvode_emit_interface();
