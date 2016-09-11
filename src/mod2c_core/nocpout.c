@@ -198,7 +198,6 @@ int artificial_cell; /* 1 if also explicitly declared an ARTIFICIAL_CELL */
 static int diamdec = 0;	/*1 if diam is declared*/
 static int areadec = 0;
 static int use_bbcorepointer = 0;
-static int need_acc_atomic_def = 0;
 
 static void defs_h();
 static int iontype();
@@ -420,16 +419,6 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n#define NET_RECEIVE_BUFFERING 1\
 \n#endif\
 \n");
-	}
-
-	if (need_acc_atomic_def) {
-		Lappendstr(defs_list,
-"\n"
-"#ifdef _OPENACC\n"
-"#define _ACC_ATOMIC_UPDATE_ _Pragma(\"acc atomic update\")\n"
-"#else\n"
-"#define _ACC_ATOMIC_UPDATE_ /**/\n"
-"#endif\n");
 	}
 
 #if 1
@@ -2531,43 +2520,6 @@ void nrn_var_assigned(s) Symbol* s; {
 diag(s->name, " is a special NEURON variable that should not be\n assigned a value\
  in a model description file\n");
 	}
-}
-
-/*
-Incremented RANGE variables (var on both sides of =) need atomic update.
-Warning if any RANGE variable on left side of = is not incremented.
-Assumption is that that is sufficient.
-*/
-void nrn_assign_netreceive(Item* qvar, Item* qequal, Item* qexpr) {
-  Symbol* var = SYM(qvar);
-  if (artificial_cell) { return; }
-  if (var->subtype & (STAT | DEP)) {
-    /* does var appear first in expression followed by '+' or '-' */
-    Item* q1 = qequal->next;
-    int is_inc = 0;
-    if (q1->itemtype == SYMBOL && SYM(q1) == var) {
-      Item* q2 = q1->next;
-      if (q2->itemtype == SYMBOL) {
-        char* op = SYM(q2)->name;
-        if (strcmp(op, "+") == 0 || strcmp(op, "-") == 0) {
-          is_inc = 1;
-        }
-      }
-    }
-
-    if (is_inc) {
-      need_acc_atomic_def = 1;
-      insertstr(qvar, "\n_ACC_ATOMIC_UPDATE_\n");
-    }else{
-      fprintf(stderr, "WARNING: The %s RANGE variable appears on left"
-" hand side of assignment statement in a NETRECEIVE block and does not"
-" appear to be of the form 'var = var + ...' or 'var = var - ...' ."
-" This is a potential race condition on a GPU if two events arrive"
-" at the same instance at the same time."
-" Inspect the block for gpu thread safety.\n"
-, var->name);
-    }
-  }
 }
 
 #if CVODE

@@ -525,9 +525,6 @@ asgn:	varname '=' expr
 			}
 #if NOCMODL
 		  nrn_var_assigned(SYM($1));
-		  if (blocktype == NETRECEIVE) {
-			nrn_assign_netreceive($1, $2, $3);
-		  }
 #endif
 		}
 	| nonlineqn expr '=' expr
