@@ -2882,20 +2882,27 @@ void emit_net_receive_buffering_code() {
 	insertstr(q, buf);
 
 sprintf(buf, "\
-\n  int _i, _j, _k;\
-\n  double _nrt, _nrflag;\
+\n  int _di;\
 \n  int stream_id = _nt->stream_id;\
 \n  Point_process* _pnt = _nt->pntprocs;\
 \n  int _pnt_length = _nt->n_pntproc - _nrb->_pnt_offset;\
+\n  int _displ_cnt = _nrb->_displ_cnt;\
 \n  _PRAGMA_FOR_NETRECV_ACC_LOOP_ \
-\n  for (_i = 0; _i < _nrb->_cnt; ++_i) {\
-\n    _j = _nrb->_pnt_index[_i];\
-\n    _k = _nrb->_weight_index[_i];\
-\n    _nrt = _nrb->_nrb_t[_i];\
-\n    _nrflag = _nrb->_nrb_flag[_i];\
-\n    _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);\
+\n  for (_di = 0; _di < _displ_cnt; ++_di) {\
+\n    int _inrb;\
+\n    int _di0 = _nrb->_displ[_di];\
+\n    int _di1 = _nrb->_displ[_di + 1];\
+\n    for (_inrb = _di0; _inrb < _di1; ++_inrb) {\
+\n      int _i = _nrb->_nrb_index[_inrb];\
+\n      int _j = _nrb->_pnt_index[_i];\
+\n      int _k = _nrb->_weight_index[_i];\
+\n      double _nrt = _nrb->_nrb_t[_i];\
+\n      double _nrflag = _nrb->_nrb_flag[_i];\
+\n      _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);\
+\n    }\
 \n  }\
 \n  #pragma acc wait(stream_id)\
+\n  _nrb->_displ_cnt = 0;\
 \n  _nrb->_cnt = 0;\
 \n  /*printf(\"_net_buf_receive_%s  %%d\\n\", _nt->_id);*/\
 \n", suffix);
@@ -2903,11 +2910,13 @@ sprintf(buf, "\
 
 	if (net_send_seen_ || net_event_seen_) {
 		sprintf(buf, "\
+\n  {\
 \n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
 \n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
 \n  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)\
 \n  update_net_send_buffer_on_host(_nt, _nsb);\
 \n#endif\
+\n  int _i;\
 \n  for (_i=0; _i < _nsb->_cnt; ++_i) {\
 \n    net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],\
 \n      _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],\
@@ -2917,6 +2926,7 @@ sprintf(buf, "\
 \n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
 \n  #pragma acc update device(_nsb->_cnt) if (_nt->compute_gpu)\
 \n#endif\
+\n  }\
 \n");
 		insertstr(q, buf);
 	}
@@ -2947,12 +2957,7 @@ sprintf(buf, "\
 \n  _NrnThread* _nt = nrn_threads + _pnt->_tid;\
 \n  NetReceiveBuffer_t* _nrb = _nt->_ml_list[_mechtype]->_net_receive_buffer;\
 \n  if (_nrb->_cnt >= _nrb->_size){\
-\n    _nrb->_size *= 2;\
-\n    _nrb->_pnt_index = (int*)erealloc(_nrb->_pnt_index, _nrb->_size*sizeof(int));\
-\n    _nrb->_weight_index = (int*)erealloc(_nrb->_weight_index, _nrb->_size*sizeof(int));\
-\n    _nrb->_nrb_t = (double*)erealloc(_nrb->_nrb_t, _nrb->_size*sizeof(double));\
-\n    _nrb->_nrb_flag = (double*)erealloc(_nrb->_nrb_flag, _nrb->_size*sizeof(double));\
-\n    _nrb->reallocated = 1;\
+\n    realloc_net_receive_buffer(_nt, _nt->_ml_list[_mechtype]);\
 \n  }\
 \n  _nrb->_pnt_index[_nrb->_cnt] = _pnt - _nt->pntprocs;\
 \n  _nrb->_weight_index[_nrb->_cnt] = _weight_index;\
