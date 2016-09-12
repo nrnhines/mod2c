@@ -63,6 +63,7 @@ extern int	net_receive_;
 extern int	net_send_seen_;
 extern int	debugging_;
 extern int	point_process;
+extern int	artificial_cell;
 extern int	derivimplic_listnum;
 
 #if CVODE
@@ -166,6 +167,10 @@ void c_out(const char* prefix)
 
 	Fprintf(fcout, "/* Created by Language version: %s */\n", nmodl_version_);
 	Fflush(fcout);
+
+	if (artificial_cell) {
+		P("\n#undef DISABLE_OPENACC\n#define DISABLE_OPENACC\n\n");
+	}
 
 #if VECTORIZE
 	if (vectorize) {
