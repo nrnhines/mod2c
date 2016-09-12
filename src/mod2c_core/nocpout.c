@@ -936,11 +936,19 @@ sprintf(buf, "  if (_prop) { _nrn_free_fornetcon(&(_prop->dparam[_fnc_index]._pv
 		if (! point_process) {
 			diag("DESTRUCTOR only permitted for POINT_PROCESS", (char*)0);
 		}
-		Lappendstr(defs_list, "static void _destructor(Prop*);\n");
+		Lappendstr(defs_list, "\n"
+			"#if 0 /*BBCORE*/\n"
+			"static void _destructor(Prop*);\n"
+			"#endif\n"
+			);
 	}
 	
 	if (constructorfunc->next != constructorfunc) {
-		Lappendstr(defs_list, "static void _constructor(Prop*);\n");
+		Lappendstr(defs_list, "\n"
+			"#if 0 /*BBCORE*/\n"
+			"static void _constructor(Prop*);\n"
+			"#endif\n"
+			);
 	}
 	
 	Lappendstr(defs_list,
@@ -1106,9 +1114,14 @@ static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {\n");
 #endif
 
 	if (constructorfunc->next != constructorfunc) {
-		Lappendstr(defs_list, "if (!nrn_point_prop_) {_constructor(_prop);}\n");
+		Lappendstr(defs_list,
+			"\n#if 0 /*BBCORE*/\n"
+			"if (!nrn_point_prop_) {_constructor(_prop);}\n"
+			"#endif\n"
+			);
 		    if (vectorize) {
 			Lappendstr(procfunc, "\n\
+#if 0 /*BBCORE*/\n\
 static _constructor(_prop)\n\
 	Prop *_prop; double* _p; Datum* _ppvar; ThreadDatum* _thread;\n\
 {\n\
@@ -1118,13 +1131,14 @@ static _constructor(_prop)\n\
 ");
 		    }else{
 			Lappendstr(procfunc, "\n\
+#if 0 /*BBCORE*/\n\
 static void _constructor(Prop* _prop) {\n\
 	_p = _prop->param; _ppvar = _prop->dparam;\n\
 {\n\
 ");
 		    }	    	
 		movelist(constructorfunc->next, constructorfunc->prev, procfunc);
-		Lappendstr(procfunc, "\n}\n}\n");
+		Lappendstr(procfunc, "\n}\n}\n#endif /*BBCORE*/\n");
 	}
 	Lappendstr(defs_list, "\n}\n");
 
@@ -1262,7 +1276,11 @@ extern void _cvode_abstol( Symbol**, double*, int);\n\n\
 	 %d);\n", brkpnt_str_, vectorize ? 1 + thread_data_index : 0);
 	 	Lappendstr(defs_list, buf);
 		if (destructorfunc->next != destructorfunc) {
-			Lappendstr(defs_list, "	register_destructor(_destructor);\n");
+			Lappendstr(defs_list, 
+			"    #if 0 /*BBCORE*/\n"
+			"    register_destructor(_destructor);\n"
+			"    #endif\n"
+			);
 		}
 	}else{
 		sprintf(buf, "\
@@ -1475,6 +1493,7 @@ sprintf(buf1, "\tivoc_help(\"help ?1 %s %s/%s\\n\");\n", mechname, buf, finname)
 	if (destructorfunc->next != destructorfunc) {
 	    if (vectorize) {
 		Lappendstr(procfunc, "\n\
+#if 0 /*BBCORE*/\n\
 static _destructor(_prop)\n\
 	Prop *_prop; double* _p; Datum* _ppvar; ThreadDatum* _thread;\n\
 {\n\
@@ -1484,13 +1503,14 @@ static _destructor(_prop)\n\
 ");
 	    }else{
 		Lappendstr(procfunc, "\n\
+#if 0 /*BBCORE*/\n\
 static void _destructor(Prop* _prop) {\n\
 	_p = _prop->param; _ppvar = _prop->dparam;\n\
 {\n\
 ");
 	    }	    	
 		movelist(destructorfunc->next, destructorfunc->prev, procfunc);
-		Lappendstr(procfunc, "\n}\n}\n");
+		Lappendstr(procfunc, "\n}\n}\n#endif /*BBCORE*/\n");
 	}
 	if (ldifuslist) {
 		ldifusreg();
