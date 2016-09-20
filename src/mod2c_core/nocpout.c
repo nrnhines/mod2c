@@ -853,12 +853,12 @@ diag("No statics allowed for thread safe models:", s->name);
 	/******** what normally goes into cabvars.h structures */
 	
 	/*declaration of the range variables names to HOC */
-	Lappendstr(defs_list, "static void nrn_alloc(double*, Datum*, int);\nstatic void  nrn_init(_NrnThread*, _Memb_list*, int);\nstatic void nrn_state(_NrnThread*, _Memb_list*, int);\n\
+	Lappendstr(defs_list, "static void nrn_alloc(double*, Datum*, int);\nvoid  nrn_init(_NrnThread*, _Memb_list*, int);\nvoid nrn_state(_NrnThread*, _Memb_list*, int);\n\
 ");
 	if (brkpnt_exists) {
-		Lappendstr(defs_list, "static void nrn_cur(_NrnThread*, _Memb_list*, int);\n");
+		Lappendstr(defs_list, "void nrn_cur(_NrnThread*, _Memb_list*, int);\n");
 	    if (!vectorize) {
-		Lappendstr(defs_list, "static void  nrn_jacob(_NrnThread*, _Memb_list*, int);\n");
+		Lappendstr(defs_list, "void  nrn_jacob(_NrnThread*, _Memb_list*, int);\n");
 	    }
 	}
 	/* count the number of pointers needed */
