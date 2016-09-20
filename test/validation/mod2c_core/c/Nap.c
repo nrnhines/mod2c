@@ -158,10 +158,10 @@ static void _acc_globals_update() {
 };
  static double _sav_indep;
  static void nrn_alloc(double*, Datum*, int);
-static void  nrn_init(_NrnThread*, _Memb_list*, int);
-static void nrn_state(_NrnThread*, _Memb_list*, int);
- static void nrn_cur(_NrnThread*, _Memb_list*, int);
- static void  nrn_jacob(_NrnThread*, _Memb_list*, int);
+void  nrn_init(_NrnThread*, _Memb_list*, int);
+void nrn_state(_NrnThread*, _Memb_list*, int);
+ void nrn_cur(_NrnThread*, _Memb_list*, int);
+ void  nrn_jacob(_NrnThread*, _Memb_list*, int);
  /* connect range variables in _p that hoc is supposed to know about */
  static const char *_mechanism[] = {
  "6.2.0",
