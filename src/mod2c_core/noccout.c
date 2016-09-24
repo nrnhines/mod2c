@@ -772,8 +772,23 @@ void c_out_vectorize(const char* prefix)
        * correctly being used.
        * While testing with PGI compiler, we have seen incorrect spike if we
        * don't update celsius, not sure the reason. */
+	/* also PGI 16.3 (but not later) has the bizarre issue that celsius
+	   is 0 when an non file function, e.g. derivimplicit_thread,
+	   is called which calls back into the mod file. But the problem
+	   does not seem to impact other global variable defined in the
+	   mod file
+	*/
         P("\n#if defined(PG_ACC_BUGS)\n");
+#if 0
         P("#pragma acc update device (celsius) if(_nt->compute_gpu)\n");
+#else /* work around a weird pg16.3 bug */
+	P("#if defined(celsius)\n");
+	P("#undef celsius;\n");
+	P("_celsius_ = celsius;\n");
+        P("#pragma acc update device (_celsius_) if(_nt->compute_gpu)\n");
+	P("#define celsius _celsius_\n");
+	P("#endif\n");
+#endif
         P("#endif\n");
 	P("_ACC_GLOBALS_UPDATE_\n");
 

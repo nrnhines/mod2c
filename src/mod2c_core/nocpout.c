@@ -537,7 +537,19 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 			Lappendstr(defs_list, buf);
             /* temp fix for PGI compiler where extern variable need copyin definition */
 			if (strcmp(s->name, "celsius") == 0) {
-				Sprintf(buf, "#if defined(PG_ACC_BUGS)\n#pragma acc declare copyin(celsius)\n#endif\n");
+				Sprintf(buf,
+#if 0
+				"#if defined(PG_ACC_BUGS)\n"
+				"#pragma acc declare copyin(celsius)\n"
+				"#endif\n");
+#else /* work around for weird pg16.3 bug */
+				"#if defined(PG_ACC_BUGS)\n"
+				"#define _celsius_ _celsius_%s\n"
+				"double _celsius_;\n"
+				"#pragma acc declare copyin(_celsius_)\n"
+				"#define celsius _celsius_\n"
+				"#endif\n", suffix);
+#endif
 			    Lappendstr(defs_list, buf);
             }
 		}
@@ -2402,7 +2414,7 @@ Sprintf(buf, "#define _ion_di%sdv\t_nt_data[_ppvar[%d*_STRIDE]]\n", sion->name, 
 	}
 
 	if (diamdec) { /* must be last */
-		Sprintf(buf, "#define diam	*_ppvar[%d]._pval\n", ioncount + *p_pointercount);
+		Sprintf(buf, "#define diam	_nt->_data[_ppvar[%d*_STRIDE]]\n", ioncount + *p_pointercount);
 		q2 = lappendstr(defs_list, buf);
 		q2->itemtype = VERBATIM;
 	} /* notice that ioncount is not incremented */
