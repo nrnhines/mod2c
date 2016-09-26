@@ -29,15 +29,17 @@ extern int _method3;
 extern double hoc_Exp(double);
 #endif
  
+#define _thread_present_ /**/ 
+ 
 #if defined(_OPENACC) && !defined(DISABLE_OPENACC)
 #include <openacc.h>
 #if defined(PG_ACC_BUGS)
-#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size][0:3], _nt[0:1]) if(_nt->compute_gpu)")
+#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size][0:3], _nt[0:1] _thread_present_) if(_nt->compute_gpu)")
 #else
-#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1]) if(_nt->compute_gpu)")
+#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1] _thread_present_) if(_nt->compute_gpu)")
 #endif
-#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)")
-#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)")
+#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _nt[0:1] _thread_present_) if(_nt->compute_gpu) async(stream_id)")
+#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1] _thread_present_) if(_nt->compute_gpu) async(stream_id)")
 #define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_shadow_rhs[0:_nt->shadow_rhs_cnt], _vec_shadow_d[0:_nt->shadow_rhs_cnt], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)")
 #define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma("acc parallel loop present(_pnt[0:_pnt_length], _nrb[0:1], _nt[0:1], nrn_threads[0:nrn_nthread]) if(_nt->compute_gpu) async(stream_id)")
 #define _ACC_GLOBALS_UPDATE_ if (_nt->compute_gpu) {_acc_globals_update();}
@@ -161,8 +163,10 @@ extern "C" {
  /* declaration of user functions */
  
 #endif /*BBCORE*/
- static int _mechtype;
- #pragma acc declare copyin (_mechtype)
+ 
+#define _mechtype _mechtype_ZoidSyn
+int _mechtype;
+#pragma acc declare copyin (_mechtype)
  extern int nrn_get_mechtype();
 extern void hoc_register_prop_size(int, int, int);
 extern Memb_func* memb_func;
@@ -343,34 +347,46 @@ static void _net_buf_receive(_NrnThread* _nt) {
   _Memb_list* _ml = _nt->_ml_list[_mechtype];
   if (!_ml) { return; }
   NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer; 
-  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;
-  _nsb->_cnt = 0;
-  #pragma acc update device(_nsb->_cnt) if(_nt->compute_gpu) 
-  int _i, _j, _k;
-  double _nrt, _nrflag;
+  int _di;
   int stream_id = _nt->stream_id;
   Point_process* _pnt = _nt->pntprocs;
   int _pnt_length = _nt->n_pntproc - _nrb->_pnt_offset;
+  int _displ_cnt = _nrb->_displ_cnt;
   _PRAGMA_FOR_NETRECV_ACC_LOOP_ 
-  for (_i = 0; _i < _nrb->_cnt; ++_i) {
-    _j = _nrb->_pnt_index[_i];
-    _k = _nrb->_weight_index[_i];
-    _nrt = _nrb->_nrb_t[_i];
-    _nrflag = _nrb->_nrb_flag[_i];
-    _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);
+  for (_di = 0; _di < _displ_cnt; ++_di) {
+    int _inrb;
+    int _di0 = _nrb->_displ[_di];
+    int _di1 = _nrb->_displ[_di + 1];
+    for (_inrb = _di0; _inrb < _di1; ++_inrb) {
+      int _i = _nrb->_nrb_index[_inrb];
+      int _j = _nrb->_pnt_index[_i];
+      int _k = _nrb->_weight_index[_i];
+      double _nrt = _nrb->_nrb_t[_i];
+      double _nrflag = _nrb->_nrb_flag[_i];
+      _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);
+    }
   }
+  #pragma acc wait(stream_id)
+  _nrb->_displ_cnt = 0;
   _nrb->_cnt = 0;
   /*printf("_net_buf_receive__ZoidSyn  %d\n", _nt->_id);*/
  
-  #pragma acc wait(stream_id)
-  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)
+  {
+  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;
 #if defined(_OPENACC) && !defined(DISABLE_OPENACC)
+  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)
   update_net_send_buffer_on_host(_nt, _nsb);
 #endif
+  int _i;
   for (_i=0; _i < _nsb->_cnt; ++_i) {
     net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],
       _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],
       _nsb->_nsb_t[_i], _nsb->_nsb_flag[_i]);
+  }
+  _nsb->_cnt = 0;
+#if defined(_OPENACC) && !defined(DISABLE_OPENACC)
+  #pragma acc update device(_nsb->_cnt) if (_nt->compute_gpu)
+#endif
   }
  
 }
@@ -394,12 +410,7 @@ static void _net_receive (Point_process* _pnt, int _weight_index, double _lflag)
   _NrnThread* _nt = nrn_threads + _pnt->_tid;
   NetReceiveBuffer_t* _nrb = _nt->_ml_list[_mechtype]->_net_receive_buffer;
   if (_nrb->_cnt >= _nrb->_size){
-    _nrb->_size *= 2;
-    _nrb->_pnt_index = (int*)erealloc(_nrb->_pnt_index, _nrb->_size*sizeof(int));
-    _nrb->_weight_index = (int*)erealloc(_nrb->_weight_index, _nrb->_size*sizeof(int));
-    _nrb->_nrb_t = (double*)erealloc(_nrb->_nrb_t, _nrb->_size*sizeof(double));
-    _nrb->_nrb_flag = (double*)erealloc(_nrb->_nrb_flag, _nrb->_size*sizeof(double));
-    _nrb->reallocated = 1;
+    realloc_net_receive_buffer(_nt, _nt->_ml_list[_mechtype]);
   }
   _nrb->_pnt_index[_nrb->_cnt] = _pnt - _nt->pntprocs;
   _nrb->_weight_index[_nrb->_cnt] = _weight_index;
@@ -504,7 +515,6 @@ static void _net_receive (Point_process* _pnt, int _weight_index, double _lflag)
 
 static void initmodel(_threadargsproto_) {
   int _i; double _save;{
-  #pragma acc update device (_mechtype)
   _Memb_list* _ml = _nt->_ml_list[_mechtype];
  {
    if ( trf <= 0.0 ) {
@@ -549,9 +559,15 @@ double _v, v; int* _ni; int _iml, _cntml_padded, _cntml_actual;
 _cntml_actual = _ml->_nodecount;
 _cntml_padded = _ml->_nodecount_padded;
 _thread = _ml->_thread;
+  #pragma acc update device (_mechtype) if(_nt->compute_gpu)
 
 #if defined(PG_ACC_BUGS)
-#pragma acc update device (celsius) if(_nt->compute_gpu)
+#if defined(celsius)
+#undef celsius;
+_celsius_ = celsius;
+#pragma acc update device (_celsius_) if(_nt->compute_gpu)
+#define celsius _celsius_
+#endif
 #endif
 _ACC_GLOBALS_UPDATE_
 double * _nt_data = _nt->_data;
@@ -579,6 +595,23 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _PRCELLSTATE_V
  initmodel(_threadargs_);
 }
+
+  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;
+#if defined(_OPENACC) && !defined(DISABLE_OPENACC)
+  #pragma acc wait(stream_id)
+  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)
+  update_net_send_buffer_on_host(_nt, _nsb);
+#endif
+  {int _i;
+  for (_i=0; _i < _nsb->_cnt; ++_i) {
+    net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],
+      _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],
+      _nsb->_nsb_t[_i], _nsb->_nsb_flag[_i]);
+  }}
+  _nsb->_cnt = 0;
+#if defined(_OPENACC) && !defined(DISABLE_OPENACC)
+  #pragma acc update device(_nsb->_cnt) if(_nt->compute_gpu)
+#endif
 }
 
 static double _nrn_current(_threadargsproto_, double _v){double _current=0.;v=_v;{ {

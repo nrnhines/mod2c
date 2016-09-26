@@ -89,7 +89,10 @@ extern "C" {
  /* external NEURON variables */
  extern double celsius;
  #if defined(PG_ACC_BUGS)
-#pragma acc declare copyin(celsius)
+#define _celsius_ _celsius__napIn
+double _celsius_;
+#pragma acc declare copyin(_celsius_)
+#define celsius _celsius_
 #endif
  
 #if 0 /*BBCORE*/
@@ -126,10 +129,10 @@ extern Memb_func* memb_func;
  #pragma acc declare copyin (minf)
  
 static void _acc_globals_update() {
- #pragma acc update device (eNa)
- #pragma acc update device (hinf)
- #pragma acc update device (mtau)
- #pragma acc update device (minf)
+ #pragma acc update device (eNa) if(nrn_threads->compute_gpu)
+ #pragma acc update device (hinf) if(nrn_threads->compute_gpu)
+ #pragma acc update device (mtau) if(nrn_threads->compute_gpu)
+ #pragma acc update device (minf) if(nrn_threads->compute_gpu)
  }
  
 #if 0 /*BBCORE*/
@@ -238,7 +241,14 @@ static int trates(double);
  
 static int _ode_spec1(_threadargsproto_);
 /*static int _ode_matsol1(_threadargsproto_);*/
- static int _slist1[2], _dlist1[2];
+ 
+#define _slist1 _slist1_napIn
+int* _slist1;
+#pragma acc declare create(_slist1)
+
+#define _dlist1 _dlist1_napIn
+int* _dlist1;
+#pragma acc declare create(_dlist1)
  static inline int states(_threadargsproto_);
  
 /*CVODE*/
@@ -394,7 +404,13 @@ static void _initlists() {
  int _cntml_padded=1;
  int _iml=0;
   if (!_first) return;
+ 
+ _slist1 = (int*)malloc(sizeof(int)*2);
+ _dlist1 = (int*)malloc(sizeof(int)*2);
  _slist1[0] = &(m) - _p;  _dlist1[0] = &(Dm) - _p;
  _slist1[1] = &(h) - _p;  _dlist1[1] = &(Dh) - _p;
+ #pragma acc enter data copyin(_slist1[0:2])
+ #pragma acc enter data copyin(_dlist1[0:2])
+
 _first = 0;
 }

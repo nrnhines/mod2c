@@ -29,15 +29,17 @@ extern int _method3;
 extern double hoc_Exp(double);
 #endif
  
+#define _thread_present_ /**/ , _thread[0:3] , _slist1[0:16], _dlist1[0:16] 
+ 
 #if defined(_OPENACC) && !defined(DISABLE_OPENACC)
 #include <openacc.h>
 #if defined(PG_ACC_BUGS)
-#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size][0:3], _nt[0:1]) if(_nt->compute_gpu)")
+#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size][0:3], _nt[0:1] _thread_present_) if(_nt->compute_gpu)")
 #else
-#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1]) if(_nt->compute_gpu)")
+#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1] _thread_present_) if(_nt->compute_gpu)")
 #endif
-#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)")
-#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)")
+#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _nt[0:1] _thread_present_) if(_nt->compute_gpu) async(stream_id)")
+#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1] _thread_present_) if(_nt->compute_gpu) async(stream_id)")
 #define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma("acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_shadow_rhs[0:_nt->shadow_rhs_cnt], _vec_shadow_d[0:_nt->shadow_rhs_cnt], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)")
 #define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma("acc parallel loop present(_pnt[0:_pnt_length], _nrb[0:1], _nt[0:1], nrn_threads[0:nrn_nthread]) if(_nt->compute_gpu) async(stream_id)")
 #define _ACC_GLOBALS_UPDATE_ if (_nt->compute_gpu) {_acc_globals_update();}
@@ -317,25 +319,25 @@ static double _thread1data[10];
 #define kP _thread[_gth]._pval[9]
  
 static void _acc_globals_update() {
- #pragma acc update device (Kcs0)
- #pragma acc update device (Kna)
- #pragma acc update device (Mg)
- #pragma acc update device (V0)
- #pragma acc update device (Vdep)
- #pragma acc update device (a)
- #pragma acc update device (b)
- #pragma acc update device (c)
- #pragma acc update device (d)
- #pragma acc update device (gmax)
- #pragma acc update device (kNi0)
- #pragma acc update device (kNo0)
- #pragma acc update device (kP0)
- #pragma acc update device (kfB0)
- #pragma acc update device (kfF0)
- #pragma acc update device (ksB0)
- #pragma acc update device (ksF0)
- #pragma acc update device (koff)
- #pragma acc update device (kon)
+ #pragma acc update device (Kcs0) if(nrn_threads->compute_gpu)
+ #pragma acc update device (Kna) if(nrn_threads->compute_gpu)
+ #pragma acc update device (Mg) if(nrn_threads->compute_gpu)
+ #pragma acc update device (V0) if(nrn_threads->compute_gpu)
+ #pragma acc update device (Vdep) if(nrn_threads->compute_gpu)
+ #pragma acc update device (a) if(nrn_threads->compute_gpu)
+ #pragma acc update device (b) if(nrn_threads->compute_gpu)
+ #pragma acc update device (c) if(nrn_threads->compute_gpu)
+ #pragma acc update device (d) if(nrn_threads->compute_gpu)
+ #pragma acc update device (gmax) if(nrn_threads->compute_gpu)
+ #pragma acc update device (kNi0) if(nrn_threads->compute_gpu)
+ #pragma acc update device (kNo0) if(nrn_threads->compute_gpu)
+ #pragma acc update device (kP0) if(nrn_threads->compute_gpu)
+ #pragma acc update device (kfB0) if(nrn_threads->compute_gpu)
+ #pragma acc update device (kfF0) if(nrn_threads->compute_gpu)
+ #pragma acc update device (ksB0) if(nrn_threads->compute_gpu)
+ #pragma acc update device (ksF0) if(nrn_threads->compute_gpu)
+ #pragma acc update device (koff) if(nrn_threads->compute_gpu)
+ #pragma acc update device (kon) if(nrn_threads->compute_gpu)
  }
  
 #if 0 /*BBCORE*/
@@ -567,22 +569,40 @@ static int _ninits = 0;
 static int _match_recurse=1;
 static void _modl_cleanup(){ _match_recurse=1;}
 static int rates(_threadargsprotocomma_ double, double);
- extern double *_nrn_thread_getelm();
  
-#define _MATELM1(_row,_col) *(_nrn_thread_getelm(_so, _row + 1, _col + 1))
+#pragma acc routine seq
+extern int sparse_thread(void*, int, int*, int*, double*, double, int, int, _threadargsproto_);
  
-#define _RHS1(_arg) _rhs[_arg+1]
+#pragma acc routine seq
+extern double *_nrn_thread_getelm(void*, int, int, int);
+ 
+#define _MATELM1(_row,_col) _nrn_thread_getelm(_so, _row + 1, _col + 1, _iml)[_iml]
+ 
+#define _RHS1(_arg) _rhs[(_arg+1)*_STRIDE]
   
 #define _linmat1  1
+ extern void* nrn_cons_sparseobj(int, int, _Memb_list*, _threadargsproto_);
  static int _spth1 = 1;
  static int _cvspth1 = 0;
  
 static int _ode_spec1(_threadargsproto_);
 /*static int _ode_matsol1(_threadargsproto_);*/
- static int _slist1[16], _dlist1[16]; static double *_temp1;
- static int kstates();
  
-static int kstates (void* _so, double* _rhs, _threadargsproto_)
+#define _slist1 _slist1_NMDA16
+int* _slist1;
+#pragma acc declare create(_slist1)
+
+#define _dlist1 _dlist1_NMDA16
+int* _dlist1;
+#pragma acc declare create(_dlist1)
+ 
+/* _kinetic_ kstates _NMDA16 */
+#ifndef INSIDE_NMODL
+#define INSIDE_NMODL
+#endif
+#include "_kinderiv.h"
+ 
+int kstates (void* _so, double* _rhs, _threadargsproto_)
  {int _reset=0;
  {
    double b_flux, f_flux, _term; int _i;
@@ -855,19 +875,27 @@ static void _net_buf_receive(_NrnThread* _nt) {
   _Memb_list* _ml = _nt->_ml_list[_mechtype];
   if (!_ml) { return; }
   NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer; 
-  int _i, _j, _k;
-  double _nrt, _nrflag;
+  int _di;
   int stream_id = _nt->stream_id;
   Point_process* _pnt = _nt->pntprocs;
   int _pnt_length = _nt->n_pntproc - _nrb->_pnt_offset;
+  int _displ_cnt = _nrb->_displ_cnt;
   _PRAGMA_FOR_NETRECV_ACC_LOOP_ 
-  for (_i = 0; _i < _nrb->_cnt; ++_i) {
-    _j = _nrb->_pnt_index[_i];
-    _k = _nrb->_weight_index[_i];
-    _nrt = _nrb->_nrb_t[_i];
-    _nrflag = _nrb->_nrb_flag[_i];
-    _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);
+  for (_di = 0; _di < _displ_cnt; ++_di) {
+    int _inrb;
+    int _di0 = _nrb->_displ[_di];
+    int _di1 = _nrb->_displ[_di + 1];
+    for (_inrb = _di0; _inrb < _di1; ++_inrb) {
+      int _i = _nrb->_nrb_index[_inrb];
+      int _j = _nrb->_pnt_index[_i];
+      int _k = _nrb->_weight_index[_i];
+      double _nrt = _nrb->_nrb_t[_i];
+      double _nrflag = _nrb->_nrb_flag[_i];
+      _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);
+    }
   }
+  #pragma acc wait(stream_id)
+  _nrb->_displ_cnt = 0;
   _nrb->_cnt = 0;
   /*printf("_net_buf_receive__NMDA16  %d\n", _nt->_id);*/
  
@@ -877,12 +905,7 @@ static void _net_receive (Point_process* _pnt, int _weight_index, double _lflag)
   _NrnThread* _nt = nrn_threads + _pnt->_tid;
   NetReceiveBuffer_t* _nrb = _nt->_ml_list[_mechtype]->_net_receive_buffer;
   if (_nrb->_cnt >= _nrb->_size){
-    _nrb->_size *= 2;
-    _nrb->_pnt_index = (int*)erealloc(_nrb->_pnt_index, _nrb->_size*sizeof(int));
-    _nrb->_weight_index = (int*)erealloc(_nrb->_weight_index, _nrb->_size*sizeof(int));
-    _nrb->_nrb_t = (double*)erealloc(_nrb->_nrb_t, _nrb->_size*sizeof(double));
-    _nrb->_nrb_flag = (double*)erealloc(_nrb->_nrb_flag, _nrb->_size*sizeof(double));
-    _nrb->reallocated = 1;
+    realloc_net_receive_buffer(_nt, _nt->_ml_list[_mechtype]);
   }
   _nrb->_pnt_index[_nrb->_cnt] = _pnt - _nt->pntprocs;
   _nrb->_weight_index[_nrb->_cnt] = _weight_index;
@@ -1303,9 +1326,24 @@ double _v, v; int* _ni; int _iml, _cntml_padded, _cntml_actual;
 _cntml_actual = _ml->_nodecount;
 _cntml_padded = _ml->_nodecount_padded;
 _thread = _ml->_thread;
+  if (!_thread[_spth1]._pvoid) {
+    _thread[_spth1]._pvoid = nrn_cons_sparseobj(_kinetic_kstates_NMDA16, 16, _ml, _threadargs_);
+    #ifdef _OPENACC
+    if (_nt->compute_gpu) {
+      void* _d_so = (void*) acc_deviceptr(_thread[_spth1]._pvoid);
+      ThreadDatum* _d_td = (ThreadDatum*)acc_deviceptr(_thread);
+      acc_memcpy_to_device(&(_d_td[_spth1]._pvoid), &_d_so, sizeof(void*));
+    }
+    #endif
+  }
 
 #if defined(PG_ACC_BUGS)
-#pragma acc update device (celsius) if(_nt->compute_gpu)
+#if defined(celsius)
+#undef celsius;
+_celsius_ = celsius;
+#pragma acc update device (_celsius_) if(_nt->compute_gpu)
+#define celsius _celsius_
+#endif
 #endif
 _ACC_GLOBALS_UPDATE_
 double * _nt_data = _nt->_data;
@@ -1473,7 +1511,11 @@ for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  v=_v;
 {
   nao = _ion_nao;
- {  sparse_thread(&_thread[_spth1]._pvoid, 16, _slist1, _dlist1, &t, dt, kstates, _linmat1, _threadargs_);
+ {  
+  #if !defined(_kinetic_kstates_NMDA16)
+    #define _kinetic_kstates_NMDA16 0
+  #endif
+  sparse_thread(_thread[_spth1]._pvoid, 16, _slist1, _dlist1, &t, dt, _kinetic_kstates_NMDA16, _linmat1, _threadargs_);
   }}}
 
 }
@@ -1487,6 +1529,9 @@ static void _initlists(){
  int _cntml_padded=1;
  int _iml=0;
   if (!_first) return;
+ 
+ _slist1 = (int*)malloc(sizeof(int)*16);
+ _dlist1 = (int*)malloc(sizeof(int)*16);
  _slist1[0] = &(RA2sMg) - _p;  _dlist1[0] = &(DRA2sMg) - _p;
  _slist1[1] = &(OMg) - _p;  _dlist1[1] = &(DOMg) - _p;
  _slist1[2] = &(O) - _p;  _dlist1[2] = &(DO) - _p;
@@ -1503,6 +1548,9 @@ static void _initlists(){
  _slist1[13] = &(RA2) - _p;  _dlist1[13] = &(DRA2) - _p;
  _slist1[14] = &(RA) - _p;  _dlist1[14] = &(DRA) - _p;
  _slist1[15] = &(R) - _p;  _dlist1[15] = &(DR) - _p;
+ #pragma acc enter data copyin(_slist1[0:16])
+ #pragma acc enter data copyin(_dlist1[0:16])
+
 _first = 0;
 }
 
