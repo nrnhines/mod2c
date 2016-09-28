@@ -655,8 +655,7 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
 	P("#if LAYOUT == 1 /*AoS*/\n");
 	P("for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n");
 	P(" _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n");
-	P("#endif\n");
-	P("#if LAYOUT == 0 /*SoA*/\n");
+	P("#elif LAYOUT == 0 /*SoA*/\n");
 	P(" _p = _ml->_data; _ppvar = _ml->_pdata;\n");
 	if (ivdep) {
 		P("/* insert compiler dependent ivdep like pragma */\n");
@@ -671,9 +670,9 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
 		    P("_PRAGMA_FOR_CUR_SYN_ACC_LOOP_\n");
 	}
 	P("for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n");
-	P("#endif\n");
-	P("#if LAYOUT > 1 /*AoSoA*/\n");
+	P("#else /* LAYOUT > 1 */ /*AoSoA*/\n");
 	P("#error AoSoA not implemented.\n");
+	P("for (;;) { /* help clang-format properly indent */\n");
 	P("#endif\n");
 
     /* cache node index */

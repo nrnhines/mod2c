@@ -389,16 +389,15 @@ int stream_id = _nt->stream_id;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
-#endif
-#if LAYOUT == 0 /*SoA*/
+#elif LAYOUT == 0 /*SoA*/
  _p = _ml->_data; _ppvar = _ml->_pdata;
 /* insert compiler dependent ivdep like pragma */
 _PRAGMA_FOR_VECTOR_LOOP_
 _PRAGMA_FOR_INIT_ACC_LOOP_
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
-#endif
-#if LAYOUT > 1 /*AoSoA*/
+#else /* LAYOUT > 1 */ /*AoSoA*/
 #error AoSoA not implemented.
+for (;;) { /* help clang-format properly indent */
 #endif
     int _nd_idx = _ni[_iml];
     _v = _vec_v[_nd_idx];
@@ -448,16 +447,15 @@ int stream_id = _nt->stream_id;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
-#endif
-#if LAYOUT == 0 /*SoA*/
+#elif LAYOUT == 0 /*SoA*/
  _p = _ml->_data; _ppvar = _ml->_pdata;
 /* insert compiler dependent ivdep like pragma */
 _PRAGMA_FOR_VECTOR_LOOP_
 _PRAGMA_FOR_CUR_ACC_LOOP_
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
-#endif
-#if LAYOUT > 1 /*AoSoA*/
+#else /* LAYOUT > 1 */ /*AoSoA*/
 #error AoSoA not implemented.
+for (;;) { /* help clang-format properly indent */
 #endif
     int _nd_idx = _ni[_iml];
     _v = _vec_v[_nd_idx];
@@ -499,16 +497,15 @@ int stream_id = _nt->stream_id;
 #if LAYOUT == 1 /*AoS*/
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
-#endif
-#if LAYOUT == 0 /*SoA*/
+#elif LAYOUT == 0 /*SoA*/
  _p = _ml->_data; _ppvar = _ml->_pdata;
 /* insert compiler dependent ivdep like pragma */
 _PRAGMA_FOR_VECTOR_LOOP_
 _PRAGMA_FOR_STATE_ACC_LOOP_
 for (_iml = 0; _iml < _cntml_actual; ++_iml) {
-#endif
-#if LAYOUT > 1 /*AoSoA*/
+#else /* LAYOUT > 1 */ /*AoSoA*/
 #error AoSoA not implemented.
+for (;;) { /* help clang-format properly indent */
 #endif
     int _nd_idx = _ni[_iml];
     _v = _vec_v[_nd_idx];
