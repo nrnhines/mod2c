@@ -658,8 +658,13 @@ static void pr_layout_for_p(int ivdep, int fun_type) {
 	P("#elif LAYOUT == 0 /*SoA*/\n");
 	P(" _p = _ml->_data; _ppvar = _ml->_pdata;\n");
 	if (ivdep) {
-		P("/* insert compiler dependent ivdep like pragma */\n");
-		P("_PRAGMA_FOR_VECTOR_LOOP_\n");
+
+        /* avoid auto-parallelization of nrn_init in artificial cell */
+        if(! (fun_type == NRN_INIT && artificial_cell) ) {
+		    P("/* insert compiler dependent ivdep like pragma */\n");
+		    P("_PRAGMA_FOR_VECTOR_LOOP_\n");
+        }
+
         if(fun_type == NRN_INIT)
 		    P("_PRAGMA_FOR_INIT_ACC_LOOP_\n");
         if(fun_type == NRN_STATE)
