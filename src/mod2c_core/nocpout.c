@@ -146,13 +146,16 @@ extern List	*symlist[];
 extern List* ldifuslist;
 extern char finname[];
 extern int check_tables_threads(List*);
+List* acc_present_list;
 List *syminorder;
 List *plotlist;
 List *defs_list;
+List *units_def_for_acc;
 int electrode_current = 0;
 int thread_data_index = 0;
 List *thread_cleanup_list;
 List *thread_mem_init_list;
+List *newtonspace_list;
 List* toplocal_;
 extern int protect_;
 extern int protect_include_;
@@ -160,6 +163,20 @@ extern List *set_ion_variables(), *get_ion_variables();
 
 static int decode_limits();
 static int decode_tolerance();
+
+/* 1 means emit the relevant code since the model
+   is a POINT_PROCESS with a NET_RECEIVE block and no net_send
+   and so the NET_RECEIVE body can be executed on the GPU.
+   _net_receive buffers the event for this type and thread and at the
+   end of NetCvode::deliver_net_events, _net_buffer_receive is called
+   so that the buffered events are
+   delivered on the gpu all at once for this type and thread.
+   In the c file, the define NET_RECEIVE_BUFFERING is used to conditionally
+   compile the NET_RECEIVE block buffering code.
+*/
+int net_receive_buffering_;
+static void emit_net_receive_buffering_code();
+
 
 /* NEURON block information */
 List *currents;
@@ -171,9 +188,11 @@ static List *rangedep;
 static List *rangestate;
 static List *nrnpointers;
 static List* uip; /* void _update_ion_pointer(Datum* _ppvar){...} text */
-static char suffix[50];
+char suffix[50];
+extern char *modprefix;
 static char *rsuffix;	/* point process range and functions don't have suffix*/
 static char *mechname;
+static char* modbase;
 int point_process; /* 1 if a point process model */
 int artificial_cell; /* 1 if also explicitly declared an ARTIFICIAL_CELL */
 static int diamdec = 0;	/*1 if diam is declared*/
@@ -195,6 +214,7 @@ static Item* net_init_q1_;
 static Item* net_init_q2_;
 static int ba_index_; /* BEFORE AFTER blocks. See bablk */
 static List* ba_list_;
+static List* acc_globals_update_list;
 
 #if CVODE
 List* state_discon_list_;
@@ -212,6 +232,8 @@ int net_event_seen_;
 int watch_seen_; /* number of WATCH statements + 1*/
 static Item* net_send_delivered_; /* location for if flag is 1 then clear the
 				tqitem_ to allow  an error message for net_move */
+static Item* net_receive_block_begin_; /* the "static void _net_receive" line */
+static Item* net_receive_block_open_brace_; /* the "{" line */
 #endif
 
 #define SYMITER(arg) ITERATE(q, syminorder){ \
@@ -229,6 +251,26 @@ static Item* net_send_delivered_; /* location for if flag is 1 then clear the
 */
 static int varcount, parraycount;
 
+void set_suffix() {
+	for (modbase = modprefix + strlen(modprefix); modbase != modprefix;
+	    modbase--) {
+		if (*modbase == '\\' || *modbase == '/') {
+			modbase++;
+			break;
+		}
+	}
+	if (!mechname) {
+		sprintf(suffix,"_%s", modbase);
+		mechname = modbase;
+	} else if (strcmp(mechname, "nothing") == 0) {
+		vectorize = 0;
+		suffix[0] = '\0';
+		mechname = modbase;
+	}else{
+		sprintf(suffix, "_%s", mechname);
+	}
+}
+
 void nrninit() {
 	extern int using_default_indep;
 	currents = newlist();
@@ -243,15 +285,14 @@ void nrninit() {
 	debugging_ = 1;
 	thread_cleanup_list = newlist();
 	thread_mem_init_list = newlist();
+	newtonspace_list = newlist();
 }
 
 void parout() {
 	int i, j, ioncount, pointercount, gind, emit_check_table_thread;
-	Item *q, *q1;
+	Item *q, *q1, *extra_pragma_loop_arg;
 	Symbol *s, *sion;
 	double d1, d2;
-	extern char *modprefix;
-	char *modbase;
 
 #if BBCORE
 	cvode_emit = 0;
@@ -273,23 +314,8 @@ void parout() {
 #endif
 	}
 
-	for (modbase = modprefix + strlen(modprefix); modbase != modprefix;
-	    modbase--) {
-		if (*modbase == '\\' || *modbase == '/') {
-			modbase++;
-			break;
-		}
-	}
-	if (!mechname) {
-		sprintf(suffix,"_%s", modbase);
-		mechname = modbase;
-	} else if (strcmp(mechname, "nothing") == 0) {
-		vectorize = 0;
-		suffix[0] = '\0';
-		mechname = modbase;
-	}else{
-		sprintf(suffix, "_%s", mechname);
-	}
+	set_suffix();	
+
 	if (artificial_cell && vectorize && (thread_data_index || toplocal_)) {
 fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specific data are not thread safe.\n");	
 		vectorize = 0;
@@ -300,10 +326,18 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 		rsuffix = suffix;
 	}
 
+	if (point_process && !artificial_cell && net_receive_) {
+	  	net_receive_buffering_ = 1;
+		emit_net_receive_buffering_code();
+	}
+
 	Lappendstr(defs_list, "\
 \n#include \"coreneuron/nrnoc/md1redef.h\"\
 \n#include \"coreneuron/nrnconf.h\"\
 \n#include \"coreneuron/nrnoc/multicore.h\"\n\
+\n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
+\n#include \"coreneuron/nrniv/nrn_acc_manager.h\"\n\
+\n#endif\
 \n#include \"coreneuron/utils/randoms/nrnran123.h\"\n\
 \n#include \"coreneuron/nrnoc/md2redef.h\"\
 \n#if METHOD3\nextern int _method3;\n#endif\n\
@@ -320,8 +354,30 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 	}
 
 	if (vectorize) {
-        /* macros for compiler dependent ivdep like pragma and memory layout */
-		Lappendstr(defs_list, "\
+        /* macros for compiler dependent ivdep like pragma and memory layout. INIT and STATE pragma are same
+         * except that sync clause absent because we saw issue only in CaDynamics_E2 */
+		extra_pragma_loop_arg = lappendstr(defs_list, "\
+\n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
+\n#include <openacc.h>\
+\n#if defined(PG_ACC_BUGS)\
+\n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size][0:3], _nt[0:1] _thread_present_) if(_nt->compute_gpu)\")\
+\n#else\
+\n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], nrn_ion_global_map[0:nrn_ion_global_map_size], _nt[0:1] _thread_present_) if(_nt->compute_gpu)\")\
+\n#endif\
+\n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _nt[0:1] _thread_present_) if(_nt->compute_gpu) async(stream_id)\")\
+\n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1] _thread_present_) if(_nt->compute_gpu) async(stream_id)\")\
+\n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"acc parallel loop present(_ni[0:_cntml_actual], _nt_data[0:_nt->_ndata], _p[0:_cntml_padded*_psize], _ppvar[0:_cntml_padded*_ppsize], _vec_v[0:_nt->end], _vec_shadow_rhs[0:_nt->shadow_rhs_cnt], _vec_shadow_d[0:_nt->shadow_rhs_cnt], _vec_d[0:_nt->end], _vec_rhs[0:_nt->end], _nt[0:1]) if(_nt->compute_gpu) async(stream_id)\")\
+\n#define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma(\"acc parallel loop present(_pnt[0:_pnt_length], _nrb[0:1], _nt[0:1], nrn_threads[0:nrn_nthread]) if(_nt->compute_gpu) async(stream_id)\")\
+\n#define _ACC_GLOBALS_UPDATE_ if (_nt->compute_gpu) {_acc_globals_update();}\
+\n#else\
+\n#define _PRAGMA_FOR_INIT_ACC_LOOP_ _Pragma(\"\")\
+\n#define _PRAGMA_FOR_STATE_ACC_LOOP_ _Pragma(\"\")\
+\n#define _PRAGMA_FOR_CUR_ACC_LOOP_ _Pragma(\"\")\
+\n#define _PRAGMA_FOR_CUR_SYN_ACC_LOOP_ _Pragma(\"\")\
+\n#define _PRAGMA_FOR_NETRECV_ACC_LOOP_ _Pragma(\"\")\
+\n#define _ACC_GLOBALS_UPDATE_ ;\
+\n#endif\
+\n \
 \n#if defined(__clang__)\
 \n#define _PRAGMA_FOR_VECTOR_LOOP_ _Pragma(\"clang loop vectorize(enable)\")\
 \n#elif defined(__ICC) || defined(__INTEL_COMPILER)\
@@ -345,7 +401,7 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n#if LAYOUT >= 1\
 \n#define _STRIDE LAYOUT\
 \n#else\
-\n#define _STRIDE _cntml + _iml\
+\n#define _STRIDE _cntml_padded + _iml\
 \n#endif\
 \n");
 	}else{
@@ -353,6 +409,15 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 \n#undef LAYOUT\
 \n#define LAYOUT 1\
 \n#define _STRIDE 1\
+\n");
+	}
+
+	if (net_receive_buffering_) {
+		Lappendstr(defs_list, "\
+\n\
+\n#if !defined(NET_RECEIVE_BUFFERING)\
+\n#define NET_RECEIVE_BUFFERING 1\
+\n#endif\
 \n");
 	}
 
@@ -364,14 +429,29 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 #define _nrn_current _nrn_current_%s\n\
 #define nrn_jacob _nrn_jacob_%s\n\
 #define nrn_state _nrn_state_%s\n\
-#define _net_receive _net_receive_%s\
-", suffix, suffix, suffix, suffix, suffix, suffix);
+#define initmodel initmodel_%s\n\
+#define _net_receive _net_receive_%s\n\
+#define nrn_state_launcher nrn_state%s_launcher\n\
+#define nrn_cur_launcher nrn_cur%s_launcher\n\
+#define nrn_jacob_launcher nrn_jacob%s_launcher\
+", suffix, suffix, suffix, suffix, suffix, suffix, suffix, suffix, suffix, suffix);
 	Lappendstr(defs_list, buf);
+
+	if (net_receive_buffering_) {
+		sprintf(buf, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n#define _net_buf_receive _net_buf_receive%s\
+\nstatic void _net_buf_receive(_NrnThread*);\
+\n#endif\
+\n", suffix);
+		Lappendstr(defs_list, buf);
+	}
+
 	SYMLISTITER {
 		Symbol* s = SYM(q);
 		/* note that with GLOBFUNCT, FUNCT will be redefined anyway */
 		if (s->type == NAME && s->subtype & (PROCED | DERF | KINF)) {
-			sprintf(buf, "\n#define %s %s_%s", s->name, s->name, suffix);
+			sprintf(buf, "\n#define %s %s%s", s->name, s->name, suffix);
 			Lappendstr(defs_list, buf);
 		}
 	}
@@ -380,10 +460,10 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 
 	if (vectorize) {
 		Lappendstr(defs_list, "\n\
-#define _threadargscomma_ _iml, _cntml, _p, _ppvar, _thread, _nt, v,\n\
-#define _threadargsprotocomma_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,\n\
-#define _threadargs_ _iml, _cntml, _p, _ppvar, _thread, _nt, v\n\
-#define _threadargsproto_ int _iml, int _cntml, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v\n\
+#define _threadargscomma_ _iml, _cntml_padded, _p, _ppvar, _thread, _nt, v,\n\
+#define _threadargsprotocomma_ int _iml, int _cntml_padded, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v,\n\
+#define _threadargs_ _iml, _cntml_padded, _p, _ppvar, _thread, _nt, v\n\
+#define _threadargsproto_ int _iml, int _cntml_padded, double* _p, Datum* _ppvar, ThreadDatum* _thread, _NrnThread* _nt, double v\n\
 ");
 	}else{
 		Lappendstr(defs_list, "\n\
@@ -438,6 +518,11 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 		}
 	}
 #endif
+	ITERATE(q, units_def_for_acc) {
+		Sprintf(buf, "#define %s %s%s\n", STR(q), STR(q), suffix);
+		Lappendstr(defs_list, buf);
+	}
+
 	Lappendstr(defs_list, "/* external NEURON variables */\n");
 	SYMLISTITER {
 		s = SYM(q);
@@ -450,6 +535,23 @@ fprintf(stderr, "Notice: ARTIFICIAL_CELL models that would require thread specif
 				Sprintf(buf, "extern double %s;\n", s->name);
 			}
 			Lappendstr(defs_list, buf);
+            /* temp fix for PGI compiler where extern variable need copyin definition */
+			if (strcmp(s->name, "celsius") == 0) {
+				Sprintf(buf,
+#if 0
+				"#if defined(PG_ACC_BUGS)\n"
+				"#pragma acc declare copyin(celsius)\n"
+				"#endif\n");
+#else /* work around for weird pg16.3 bug */
+				"#if defined(PG_ACC_BUGS)\n"
+				"#define _celsius_ _celsius_%s\n"
+				"double _celsius_;\n"
+				"#pragma acc declare copyin(_celsius_)\n"
+				"#define celsius _celsius_\n"
+				"#endif\n", suffix);
+#endif
+			    Lappendstr(defs_list, buf);
+            }
 		}
 	}
 	
@@ -472,7 +574,16 @@ Sprintf(buf, "static void _hoc_%s(void);\n", s->name);
 	Lappendstr(defs_list, "\n#endif /*BBCORE*/\n");
 #endif
 
-	Lappendstr(defs_list, "static int _mechtype;\n\
+	q = lappendstr(defs_list, "static int _mechtype;\n");
+	if (net_send_seen_ && !artificial_cell) {
+		Sprintf(buf,
+		  "\n#define _mechtype _mechtype%s\n"
+		  "int _mechtype;\n"
+		  "#pragma acc declare copyin (_mechtype)\n"
+		  , suffix);
+		replacstr(q, buf);
+	}
+	Lappendstr(defs_list, "\
 extern int nrn_get_mechtype();\n\
 extern void hoc_register_prop_size(int, int, int);\n\
 extern Memb_func* memb_func;\n\
@@ -633,6 +744,7 @@ sprintf(buf, "static double %s;\n", SYM(q)->name);
 		++thread_data_index;
 	}
 	gind = 0;
+	acc_globals_update_list = newlist();
  	SYMLISTITER { /* globals are now global with respect to C as well as hoc */
 		s = SYM(q);
 		if (s->nrntype & (NRNGLOBAL)) {
@@ -667,10 +779,33 @@ s->name, suffix, gind, s->name, gind);
 				Sprintf(buf, "double %s = %g;\n", s->name, d1);
 			}
 			Lappendstr(defs_list, buf);
+#if BBCORE
+			if (s->subtype & ARRAY) {
+				Sprintf(buf, "#pragma acc declare copyin (%s,%d)\n", s->name, s->araydim);
+			}else{
+				Sprintf(buf, "#pragma acc declare copyin (%s)\n", s->name);
+			}
+			Lappendstr(defs_list, buf);
+
+			if (s->subtype & ARRAY) {
+				Sprintf(buf, "#pragma acc update device (%s,%d) if(nrn_threads->compute_gpu)\n", s->name, s->araydim);
+			}else{
+				Sprintf(buf, "#pragma acc update device (%s) if(nrn_threads->compute_gpu)\n", s->name);
+			}
+			Lappendstr(acc_globals_update_list, buf);
+#endif
 		}
 	}
 
 #if BBCORE
+	if (acc_globals_update_list) {
+		Lappendstr(defs_list, "\nstatic void _acc_globals_update() {\n");
+		if (acc_globals_update_list->next != acc_globals_update_list) {
+			movelist(acc_globals_update_list->next, acc_globals_update_list->prev, defs_list);
+		}
+		Lappendstr(defs_list, "}\n");
+	}
+
 	Lappendstr(defs_list, "\n#if 0 /*BBCORE*/\n");
 #endif
 	Lappendstr(defs_list, "/* some parameters have upper and lower limits */\n");
@@ -713,9 +848,7 @@ diag("No statics allowed for thread safe models:", s->name);
 			Lappendstr(defs_list, buf);
 		}
 	}
-#if BBCORE
-	Lappendstr(defs_list, "\n#if 0 /*BBCORE*/\n");
-#endif
+
 	Lappendstr(defs_list, "/* connect global user variables to hoc */\n");
 	Lappendstr(defs_list,"static DoubScal hoc_scdoub[] = {\n");
  	ITERATE(q, syminorder) {
@@ -737,9 +870,7 @@ diag("No statics allowed for thread safe models:", s->name);
 		}
 	}
 	Lappendstr(defs_list, "0,0,0\n};\n");
-#if BBCORE
-	Lappendstr(defs_list, "\n#endif /*BBCORE*/\n");
-#endif
+
 	Lappendstr(defs_list, "static double _sav_indep;\n");
 	if (ba_index_ > 0) {
 		Lappendstr(defs_list, "static void _ba1()");
@@ -753,12 +884,12 @@ diag("No statics allowed for thread safe models:", s->name);
 	/******** what normally goes into cabvars.h structures */
 	
 	/*declaration of the range variables names to HOC */
-	Lappendstr(defs_list, "static void nrn_alloc(double*, Datum*, int);\nstatic void  nrn_init(_NrnThread*, _Memb_list*, int);\nstatic void nrn_state(_NrnThread*, _Memb_list*, int);\n\
+	Lappendstr(defs_list, "static void nrn_alloc(double*, Datum*, int);\nvoid  nrn_init(_NrnThread*, _Memb_list*, int);\nvoid nrn_state(_NrnThread*, _Memb_list*, int);\n\
 ");
 	if (brkpnt_exists) {
-		Lappendstr(defs_list, "static void nrn_cur(_NrnThread*, _Memb_list*, int);\n");
+		Lappendstr(defs_list, "void nrn_cur(_NrnThread*, _Memb_list*, int);\n");
 	    if (!vectorize) {
-		Lappendstr(defs_list, "static void  nrn_jacob(_NrnThread*, _Memb_list*, int);\n");
+		Lappendstr(defs_list, "void  nrn_jacob(_NrnThread*, _Memb_list*, int);\n");
 	    }
 	}
 	/* count the number of pointers needed */
@@ -817,11 +948,19 @@ sprintf(buf, "  if (_prop) { _nrn_free_fornetcon(&(_prop->dparam[_fnc_index]._pv
 		if (! point_process) {
 			diag("DESTRUCTOR only permitted for POINT_PROCESS", (char*)0);
 		}
-		Lappendstr(defs_list, "static void _destructor(Prop*);\n");
+		Lappendstr(defs_list, "\n"
+			"#if 0 /*BBCORE*/\n"
+			"static void _destructor(Prop*);\n"
+			"#endif\n"
+			);
 	}
 	
 	if (constructorfunc->next != constructorfunc) {
-		Lappendstr(defs_list, "static void _constructor(Prop*);\n");
+		Lappendstr(defs_list, "\n"
+			"#if 0 /*BBCORE*/\n"
+			"static void _constructor(Prop*);\n"
+			"#endif\n"
+			);
 	}
 	
 	Lappendstr(defs_list,
@@ -912,6 +1051,13 @@ static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {\n");
 		Lappendstr(defs_list, buf);
 	}
 
+	if (diamdec) {
+		ppvar_semantics(ioncount + pointercount, "diam");
+	}
+	if (areadec) {
+		ppvar_semantics(ioncount + pointercount + diamdec, "area");
+	}
+
 	if (point_process) {
 		ioncount = 2;
 	}else{
@@ -980,9 +1126,14 @@ static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {\n");
 #endif
 
 	if (constructorfunc->next != constructorfunc) {
-		Lappendstr(defs_list, "if (!nrn_point_prop_) {_constructor(_prop);}\n");
+		Lappendstr(defs_list,
+			"\n#if 0 /*BBCORE*/\n"
+			"if (!nrn_point_prop_) {_constructor(_prop);}\n"
+			"#endif\n"
+			);
 		    if (vectorize) {
 			Lappendstr(procfunc, "\n\
+#if 0 /*BBCORE*/\n\
 static _constructor(_prop)\n\
 	Prop *_prop; double* _p; Datum* _ppvar; ThreadDatum* _thread;\n\
 {\n\
@@ -992,13 +1143,14 @@ static _constructor(_prop)\n\
 ");
 		    }else{
 			Lappendstr(procfunc, "\n\
+#if 0 /*BBCORE*/\n\
 static void _constructor(Prop* _prop) {\n\
 	_p = _prop->param; _ppvar = _prop->dparam;\n\
 {\n\
 ");
 		    }	    	
 		movelist(constructorfunc->next, constructorfunc->prev, procfunc);
-		Lappendstr(procfunc, "\n}\n}\n");
+		Lappendstr(procfunc, "\n}\n}\n#endif /*BBCORE*/\n");
 	}
 	Lappendstr(defs_list, "\n}\n");
 
@@ -1033,19 +1185,32 @@ Sprintf(buf, "\"%s\", %g,\n", s->name, d1);
 		if (!net_receive_) {
 			diag("can't use net_send if there is no NET_RECEIVE block", (char*)0);
 		}
-		sprintf(buf, "\n#define _tqitem &(_nt->_vdata[_ppvar[%d]])\n", tqitem_index);
+		sprintf(buf, "\n#define _tqitem &(_nt->_vdata[_ppvar[%d*_STRIDE]])\n", tqitem_index);
 		Lappendstr(defs_list, buf);
+		if (net_receive_buffering_) {
+			sprintf(buf, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n#undef _tqitem\
+\n#define _tqitem _ppvar[%d*_STRIDE]\
+\n#endif\
+\n\n", tqitem_index);
+			Lappendstr(defs_list, buf);
+		}
 		if (net_send_delivered_) {
-			insertstr(net_send_delivered_, "  if (_lflag == 1. ) {*(_tqitem) = 0;}\n");
+			insertstr(net_send_delivered_, "\
+\n#if !NET_RECEIVE_BUFFERING\
+\n  if (_lflag == 1. ) {*(_tqitem) = 0;}\
+\n#endif\
+\n");
 		}
 	}
 	if (net_receive_) {
-		Lappendstr(defs_list, "static void _net_receive(Point_process*, double*, double);\n");
+		Lappendstr(defs_list, "static void _net_receive(Point_process*, int, double);\n");
 		if (for_netcons_) {
 			Lappendstr(defs_list, "extern int _nrn_netcon_args(void*, double***);\n");
 		}
 		if (net_init_q1_) {
-			Lappendstr(defs_list, "static void _net_init(Point_process*, double*, double);\n");
+			Lappendstr(defs_list, "static void _net_init(Point_process*, int, double);\n");
 		}
 	}
 	if (vectorize && thread_mem_init_list->next != thread_mem_init_list) {
@@ -1123,7 +1288,11 @@ extern void _cvode_abstol( Symbol**, double*, int);\n\n\
 	 %d);\n", brkpnt_str_, vectorize ? 1 + thread_data_index : 0);
 	 	Lappendstr(defs_list, buf);
 		if (destructorfunc->next != destructorfunc) {
-			Lappendstr(defs_list, "	register_destructor(_destructor);\n");
+			Lappendstr(defs_list, 
+			"    #if 0 /*BBCORE*/\n"
+			"    register_destructor(_destructor);\n"
+			"    #endif\n"
+			);
 		}
 	}else{
 		sprintf(buf, "\
@@ -1137,6 +1306,17 @@ extern void _cvode_abstol( Symbol**, double*, int);\n\n\
 			Lappendstr(defs_list, " _thread_mem_init(_extcall_thread);\n");
 			if (gind) {Lappendstr(defs_list, " _thread1data_inuse = 0;\n");}
 		}
+	}
+	if (vectorize) {
+		insertstr(extra_pragma_loop_arg, "\n#define _thread_present_ /**/");
+		if (thread_data_index) {
+			sprintf(buf, ", _thread[0:%d]", thread_data_index);
+			insertstr(extra_pragma_loop_arg, buf);
+		}
+		ITERATE(q, acc_present_list) {
+			insertstr(extra_pragma_loop_arg, STR(q));
+		}
+		insertstr(extra_pragma_loop_arg, "\n");
 	}
 #endif
 #if !BBCORE
@@ -1220,6 +1400,20 @@ located in a section and is not associated with an integrator\n"
 	if (net_event_seen_) {
 		Lappendstr(defs_list, "add_nrn_has_net_event(_mechtype);\n");
 	}
+	if (net_receive_buffering_) {
+		Lappendstr(defs_list, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n  hoc_register_net_receive_buffering(_net_buf_receive, _mechtype);\
+\n#endif\
+\n");
+		if (net_send_seen_ || net_event_seen_) {
+			Lappendstr(defs_list, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n  hoc_register_net_send_buffering(_mechtype);\
+\n#endif\
+\n");
+		}
+	}
 	if (net_receive_) {
 		Lappendstr(defs_list, "pnt_receive[_mechtype] = _net_receive;\n");
 		if (net_init_q1_) {
@@ -1269,9 +1463,14 @@ if (_nd->_extnode) {\n\
 		Linsertstr(defs_list, "static void _difusfunc(ldifusfunc2_t, _NrnThread*);\n");
 	}
     } /* end of not "nothing" */
-#if !BBCORE
+#if BBCORE
+	Lappendstr(defs_list, "\
+	hoc_register_var(hoc_scdoub, hoc_vdoub, NULL);\n");
+#else
 	Lappendstr(defs_list, "\
 	hoc_register_var(hoc_scdoub, hoc_vdoub, hoc_intfunc);\n");
+#endif
+#if !BBCORE
 	if (GETWD(buf)) {
 		char buf1[NRN_BUFSIZE];
 #if defined(MINGW)
@@ -1306,6 +1505,7 @@ sprintf(buf1, "\tivoc_help(\"help ?1 %s %s/%s\\n\");\n", mechname, buf, finname)
 	if (destructorfunc->next != destructorfunc) {
 	    if (vectorize) {
 		Lappendstr(procfunc, "\n\
+#if 0 /*BBCORE*/\n\
 static _destructor(_prop)\n\
 	Prop *_prop; double* _p; Datum* _ppvar; ThreadDatum* _thread;\n\
 {\n\
@@ -1315,13 +1515,14 @@ static _destructor(_prop)\n\
 ");
 	    }else{
 		Lappendstr(procfunc, "\n\
+#if 0 /*BBCORE*/\n\
 static void _destructor(Prop* _prop) {\n\
 	_p = _prop->param; _ppvar = _prop->dparam;\n\
 {\n\
 ");
 	    }	    	
 		movelist(destructorfunc->next, destructorfunc->prev, procfunc);
-		Lappendstr(procfunc, "\n}\n}\n");
+		Lappendstr(procfunc, "\n}\n}\n#endif /*BBCORE*/\n");
 	}
 	if (ldifuslist) {
 		ldifusreg();
@@ -1638,6 +1839,7 @@ void nrn_list(q1, q2)
 			point_process = 1;
 			artificial_cell = 1;
 		}
+		set_suffix();
 		break;
 	case ELECTRODE_CURRENT:
 		electrode_current = 1;
@@ -1916,6 +2118,7 @@ static void del_range(range)
 static void declare_p() {
 	Item *q;
 	Symbol* s;
+	int pcs = 0;
 	
 	ITERATE(q, syminorder) {
 		SYM(q)->used = -1;
@@ -1938,12 +2141,14 @@ static void declare_p() {
 	if (vectorize) {
 		s = ifnew_install("_v_unused");
 		var_count(s);
+		pcs = 1;
 	}
 #endif
 	if (brkpnt_exists) {
 	    if (vectorize) {
 		s = ifnew_install("_g_unused");
 		var_count(s);
+		pcs = 2;
 	    }else{
 		s = ifnew_install("_g");
 		var_count(s);
@@ -1952,6 +2157,21 @@ static void declare_p() {
 	if (debugging_ && net_receive_) {
 		s = ifnew_install("_tsav");
 		var_count(s);
+	}
+	if (pcs) {
+		sprintf(buf, "\
+\n#ifndef NRN_PRCELLSTATE\
+\n#define NRN_PRCELLSTATE 0\
+\n#endif\
+\n#if NRN_PRCELLSTATE\
+\n#define _PRCELLSTATE_V _v_unused = _v;\
+\n#define _PRCELLSTATE_G %s\
+\n#else\
+\n#define _PRCELLSTATE_V /**/\
+\n#define _PRCELLSTATE_G /**/\
+\n#endif\
+\n", (pcs == 2) ? "_g_unused = _g;" : "/**/");
+		Lappendstr(defs_list, buf);
 	}
 }
 
@@ -1962,6 +2182,7 @@ List *set_ion_variables(block)
 	Item *q, *q1, *qconc;
 	char* in;
 	static List *l;
+	int declared = 0;
 
 	l = newlist();
 	ITERATE(q, useion) {
@@ -2012,9 +2233,22 @@ Sprintf(buf, " _ion_%s = %s;\n", SYM(q1)->name, SYM(q1)->name);
 			}else{
 				assert(0);
 			}
-/* first arg is for the charge and memb_list, second and third give pointer to erev, fourth arg is the style, fifth needed for figuring out _cntml if SoA*/
-			Sprintf(buf, " nrn_wrote_conc(_%s_type, &(_ion_%s), %d, _style_%s, _nt);\n",
-				in, SYM(qconc)->name, ic, in);
+            /* first arg is for the charge and memb_list, second and third give 
+             * pointer to erev, fourth arg is the style, seventh needed for figuring 
+             * out _cntml if SoA. Note 2nd argument added as pe because we see errors 
+             * with pointer arithmetic in OpenACC cray compiler
+             */
+			Sprintf(buf, "    %s _pe = (&(_ion_%s));\n", declared ? "" : "double*", SYM(qconc)->name);
+			Lappendstr(l, buf);
+			Sprintf(buf, "    _Memb_list* _%s_ml;\n", in);
+			Lappendstr(l, buf);
+			Sprintf(buf, "    _%s_ml = _nt->_ml_list[_%s_type];\n", in, in);
+			Lappendstr(l, buf);
+			Sprintf(buf, "    %s _tmp_cntml = _%s_ml->_nodecount_padded;\n", declared ? "" : "int", in);
+			declared = 1;
+			Lappendstr(l, buf);
+			Sprintf(buf, "    nrn_wrote_conc(_%s_type, _pe, %d, _style_%s, nrn_ion_global_map, celsius, _tmp_cntml);\n",
+				in, ic, in);
 			Lappendstr(l, buf);
 		}
 	}
@@ -2180,7 +2414,7 @@ Sprintf(buf, "#define _ion_di%sdv\t_nt_data[_ppvar[%d*_STRIDE]]\n", sion->name, 
 	}
 
 	if (diamdec) { /* must be last */
-		Sprintf(buf, "#define diam	*_ppvar[%d]._pval\n", ioncount + *p_pointercount);
+		Sprintf(buf, "#define diam	_nt->_data[_ppvar[%d*_STRIDE]]\n", ioncount + *p_pointercount);
 		q2 = lappendstr(defs_list, buf);
 		q2->itemtype = VERBATIM;
 	} /* notice that ioncount is not incremented */
@@ -2440,10 +2674,11 @@ diag(SYM(q1)->name, " is WRITE but is not a STATE and has no assignment statemen
 
 void out_nt_ml_frag(List* p) {
 		vectorize_substitute(lappendstr(p, "  ThreadDatum* _thread;\n"), "  double* _p; Datum* _ppvar; ThreadDatum* _thread;\n");
-		Lappendstr(p, "  Node* _nd; double _v; int _iml, _cntml;\n\
-  _cntml = _ml->_nodecount;\n\
+		Lappendstr(p, "  Node* _nd; double _v; int _iml, _cntml_padded, _cntml_actual;\n\
+  _cntml_actual = _ml->_nodecount;\n\
+  _cntml_padded = _ml->_nodecount_padded;\n\
   _thread = _ml->_thread;\n\
-  for (_iml = 0; _iml < _cntml; ++_iml) {\n\
+  for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n\
     _p = _ml->_data[_iml]; _ppvar = _ml->_pdata[_iml];\n\
     _nd = _ml->_nodelist[_iml];\n\
     v = NODEV(_nd);\n\
@@ -2584,7 +2819,7 @@ void cvode_interface(fun, num, neq) Symbol* fun; int num, neq; {
 	}
 	Sprintf(buf, "\n\
 static int _ode_spec%d(_threadargsproto_);\n\
-static int _ode_matsol%d(_threadargsproto_);\n\
+/*static int _ode_matsol%d(_threadargsproto_);*/\n\
 ", num, num);
 	Linsertstr(procfunc, buf);
 }
@@ -2627,11 +2862,25 @@ sprintf(b, "if (_nt->_vcv) { _ode_spec%d(); }\n", cvode_num_);
 }
 #endif
 
-const char* net_boilerplate() {
+const char* net_boilerplate(int flag) {
+	char b[1000];
+	b[0] = '\0';
+	
 	sprintf(buf, "\n\
-   _thread = (ThreadDatum*)0; _nt = nrn_threads + _pnt->_tid;\n\
+   _NrnThread* _nt;\n\
+   int _tid = _pnt->_tid; \n\
+   _nt = nrn_threads + _tid;\n\
+");
+
+	sprintf(b, "%s", buf);
+
+	sprintf(buf, "%s\
+   _thread = (ThreadDatum*)0; \n\
+   double *_weights = _nt->_weights;\n\
+   _args = _weights + _weight_index;\n\
    _ml = _nt->_ml_list[_pnt->_type];\n\
-   _cntml = _ml->_nodecount;\n\
+   _cntml_actual = _ml->_nodecount;\n\
+   _cntml_padded = _ml->_nodecount_padded;\n\
    _iml = _pnt->_i_instance;\n\
 #if LAYOUT == 1 /*AoS*/\n\
    _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n\
@@ -2642,12 +2891,128 @@ const char* net_boilerplate() {
 #if LAYOUT > 1 /*AoSoA*/\n\
 #error AoSoA not implemented.\n\
 #endif\n\
-");
+", b);
 	return buf;
 }
 
-void net_receive(qarg, qp1, qp2, qstmt, qend)
-	Item* qarg, *qp1, *qp2, *qstmt, *qend;
+void emit_net_receive_buffering_code() {
+	Item* q;
+	if (!net_receive_buffering_) { return; }
+	q = net_receive_block_begin_;
+	insertstr(q, "\n#if NET_RECEIVE_BUFFERING");
+
+	sprintf(buf, "\
+\n#undef t\
+\n#define t _nrb_t\
+\nstatic void _net_receive_kernel(double, Point_process*, int _weight_index, double _flag);\
+\nstatic void _net_buf_receive(_NrnThread* _nt) {\
+\n  if (!_nt->_ml_list) { return; }\
+\n  _Memb_list* _ml = _nt->_ml_list[_mechtype];\
+\n  if (!_ml) { return; }\
+\n  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer;\
+");
+	insertstr(q, buf);
+
+sprintf(buf, "\
+\n  int _di;\
+\n  int stream_id = _nt->stream_id;\
+\n  Point_process* _pnt = _nt->pntprocs;\
+\n  int _pnt_length = _nt->n_pntproc - _nrb->_pnt_offset;\
+\n  int _displ_cnt = _nrb->_displ_cnt;\
+\n  _PRAGMA_FOR_NETRECV_ACC_LOOP_ \
+\n  for (_di = 0; _di < _displ_cnt; ++_di) {\
+\n    int _inrb;\
+\n    int _di0 = _nrb->_displ[_di];\
+\n    int _di1 = _nrb->_displ[_di + 1];\
+\n    for (_inrb = _di0; _inrb < _di1; ++_inrb) {\
+\n      int _i = _nrb->_nrb_index[_inrb];\
+\n      int _j = _nrb->_pnt_index[_i];\
+\n      int _k = _nrb->_weight_index[_i];\
+\n      double _nrt = _nrb->_nrb_t[_i];\
+\n      double _nrflag = _nrb->_nrb_flag[_i];\
+\n      _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);\
+\n    }\
+\n  }\
+\n  #pragma acc wait(stream_id)\
+\n  _nrb->_displ_cnt = 0;\
+\n  _nrb->_cnt = 0;\
+\n  /*printf(\"_net_buf_receive_%s  %%d\\n\", _nt->_id);*/\
+\n", suffix);
+	insertstr(q, buf);
+
+	if (net_send_seen_ || net_event_seen_) {
+		sprintf(buf, "\
+\n  {\
+\n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
+\n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
+\n  #pragma acc update self(_nsb->_cnt) if(_nt->compute_gpu)\
+\n  update_net_send_buffer_on_host(_nt, _nsb);\
+\n#endif\
+\n  int _i;\
+\n  for (_i=0; _i < _nsb->_cnt; ++_i) {\
+\n    net_sem_from_gpu(_nsb->_sendtype[_i], _nsb->_vdata_index[_i],\
+\n      _nsb->_weight_index[_i], _nt->_id, _nsb->_pnt_index[_i],\
+\n      _nsb->_nsb_t[_i], _nsb->_nsb_flag[_i]);\
+\n  }\
+\n  _nsb->_cnt = 0;\
+\n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
+\n  #pragma acc update device(_nsb->_cnt) if (_nt->compute_gpu)\
+\n#endif\
+\n  }\
+\n");
+		insertstr(q, buf);
+	}
+
+	insertstr(q, "\n}\n");
+
+	if (net_send_seen_ || net_event_seen_) {
+		sprintf(buf, "\
+\nstatic void _net_send_buffering(NetSendBuffer_t* _nsb, int _sendtype, int _i_vdata, int _weight_index,\
+\n int _ipnt, double _t, double _flag) {\
+\n  int _i = 0;\
+\n  #pragma acc atomic capture\
+\n  _i = _nsb->_cnt++;\
+\n  if (_i >= _nsb->_size) {\
+\n  }\
+\n  _nsb->_sendtype[_i] = _sendtype;\
+\n  _nsb->_vdata_index[_i] = _i_vdata;\
+\n  _nsb->_weight_index[_i] = _weight_index;\
+\n  _nsb->_pnt_index[_i] = _ipnt;\
+\n  _nsb->_nsb_t[_i] = _t;\
+\n  _nsb->_nsb_flag[_i] = _flag;\
+\n}\n");
+		insertstr(q, buf);
+	}
+
+	sprintf(buf, "\
+\nstatic void _net_receive (Point_process* _pnt, int _weight_index, double _lflag) {\
+\n  _NrnThread* _nt = nrn_threads + _pnt->_tid;\
+\n  NetReceiveBuffer_t* _nrb = _nt->_ml_list[_mechtype]->_net_receive_buffer;\
+\n  if (_nrb->_cnt >= _nrb->_size){\
+\n    realloc_net_receive_buffer(_nt, _nt->_ml_list[_mechtype]);\
+\n  }\
+\n  _nrb->_pnt_index[_nrb->_cnt] = _pnt - _nt->pntprocs;\
+\n  _nrb->_weight_index[_nrb->_cnt] = _weight_index;\
+\n  _nrb->_nrb_t[_nrb->_cnt] = _nt->_t;\
+\n  _nrb->_nrb_flag[_nrb->_cnt] = _lflag;\
+\n  ++_nrb->_cnt;\
+\n}\
+\n");
+	insertstr(q, buf);
+
+	sprintf(buf, "\
+\nstatic void _net_receive_kernel(double _nrb_t, Point_process* _pnt, int _weight_index, double _lflag)\
+\n#else\
+\n");
+	insertstr(q, buf);
+
+	/* close off */
+	q = net_receive_block_open_brace_;
+	insertstr(q, "\n#endif\n");
+}
+
+void net_receive(qblk, qarg, qp1, qp2, qstmt, qend)
+	Item* qblk, *qarg, *qp1, *qp2, *qstmt, *qend;
 {
 	Item* q, *q1;
 	Symbol* s;
@@ -2660,8 +3025,9 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 		diag("NET_RECEIVE can only exist in a POINT_PROCESS", (char*)0);
 	}
 	net_receive_ = 1;
+	net_receive_block_begin_ = qblk;
 	deltokens(qp1, qp2);
-	insertstr(qstmt, "(Point_process* _pnt, double* _args, double _lflag)");
+	insertstr(qstmt, "(Point_process* _pnt, int _weight_index, double _lflag)");
 	i = 0;
 	ITERATE(q1, qarg) if (q1->next != qarg) { /* skip last "flag" arg */
 		s = SYM(q1);
@@ -2675,22 +3041,31 @@ void net_receive(qarg, qp1, qp2, qstmt, qend)
 	}
 	net_send_delivered_ = qstmt;
 	q = insertstr(qstmt, "\n{");
+	net_receive_block_open_brace_ = q;
 	vectorize_substitute(q, "\n\
-{  double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt; double v;\n\
-   _Memb_list* _ml; int _cntml; int _iml;\n\
+{  double* _p; Datum* _ppvar; ThreadDatum* _thread; double v;\n\
+   _Memb_list* _ml; int _cntml_padded, _cntml_actual; int _iml; double* _args;\n\
 ");
+
 	if (watch_seen_) {
 		insertstr(qstmt, "  int _watch_rm = 0;\n");
 	}
-	q = insertstr(qstmt, net_boilerplate());
+	q = insertstr(qstmt, net_boilerplate(1));
 	if (debugging_) {
 	    if (1) {
-		insertstr(qstmt, " assert(_tsav <= t); _tsav = t;");
+		insertstr(qstmt, " #if !defined(_OPENACC) \n assert(_tsav <= t); \n #endif \n _tsav = t;");
 	    }else{
 		insertstr(qstmt, " if (_tsav > t){ extern char* hoc_object_name(); hoc_execerror(hoc_object_name(_pnt->ob), \":Event arrived out of order. Must call ParallelContext.set_maxstep AFTER assigning minimum NetCon.delay\");}\n _tsav = t;");
 	    }
 	}
 	insertstr(qend, "}");
+insertstr(qend, "\
+\n#if NET_RECEIVE_BUFFERING\
+\n#undef t\
+\n#define t _nt->_t\
+\n#endif\
+\n");
+
 	if (!artificial_cell) {
 		Symbol* ions[10]; int j, nion=0;
 		/* v can be changed in the NET_RECEIVE block since it is
@@ -2757,12 +3132,12 @@ void net_init(qinit, qp2)
 	Item* qinit, *qp2;
 {
 	/* qinit=INITIAL { stmtlist qp2=} */
-	replacstr(qinit, "\nstatic void _net_init(Point_process* _pnt, double* _args, double _lflag)");
+	replacstr(qinit, "\nstatic void _net_init(Point_process* _pnt, int _weight_index, double _lflag)");
 	vectorize_substitute(insertstr(qinit->next->next, ""), "\n\
-   double* _p; Datum* _ppvar; ThreadDatum* _thread; _NrnThread* _nt;\n\
-   _Memb_list* _ml; int _cntml; int _iml;\n\
+   double* _p; Datum* _ppvar; ThreadDatum* _thread; \n\
+   _Memb_list* _ml; int _cntml_padded, _cntml_actual; int _iml; double* _args;\n\
 ");
-	vectorize_substitute(insertstr(qinit->next->next->next, ""), net_boilerplate());
+	vectorize_substitute(insertstr(qinit->next->next->next, ""), net_boilerplate(0));
 	if (net_init_q1_) {
 		diag("NET_RECEIVE block can contain only one INITIAL block", (char*)0);
 	}

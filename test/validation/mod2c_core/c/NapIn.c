@@ -10,6 +10,10 @@
 #include "coreneuron/nrnconf.h"
 #include "coreneuron/nrnoc/multicore.h"
 
+#if defined(_OPENACC) && !defined(DISABLE_OPENACC)
+#include "coreneuron/nrniv/nrn_acc_manager.h"
+
+#endif
 #include "coreneuron/utils/randoms/nrnran123.h"
 
 #include "coreneuron/nrnoc/md2redef.h"
@@ -34,9 +38,13 @@ extern double hoc_Exp(double);
 #define _nrn_current _nrn_current__napIn
 #define nrn_jacob _nrn_jacob__napIn
 #define nrn_state _nrn_state__napIn
-#define _net_receive _net_receive__napIn 
-#define states states__napIn 
-#define trates trates__napIn 
+#define initmodel initmodel__napIn
+#define _net_receive _net_receive__napIn
+#define nrn_state_launcher nrn_state_napIn_launcher
+#define nrn_cur_launcher nrn_cur_napIn_launcher
+#define nrn_jacob_launcher nrn_jacob_napIn_launcher 
+#define states states_napIn 
+#define trates trates_napIn 
  
 #define _threadargscomma_ /**/
 #define _threadargsprotocomma_ /**/
@@ -80,6 +88,12 @@ extern "C" {
  static int hoc_nrnpointerindex =  -1;
  /* external NEURON variables */
  extern double celsius;
+ #if defined(PG_ACC_BUGS)
+#define _celsius_ _celsius__napIn
+double _celsius_;
+#pragma acc declare copyin(_celsius_)
+#define celsius _celsius_
+#endif
  
 #if 0 /*BBCORE*/
  /* declaration of user functions */
@@ -87,7 +101,7 @@ extern "C" {
  
 #endif /*BBCORE*/
  static int _mechtype;
-extern int nrn_get_mechtype();
+ extern int nrn_get_mechtype();
 extern void hoc_register_prop_size(int, int, int);
 extern Memb_func* memb_func;
  
@@ -103,12 +117,23 @@ extern Memb_func* memb_func;
  /* declare global and static user variables */
 #define eNa eNa_napIn
  double eNa = 55;
+ #pragma acc declare copyin (eNa)
 #define hinf hinf_napIn
  double hinf = 0;
+ #pragma acc declare copyin (hinf)
 #define mtau mtau_napIn
  double mtau = 0;
+ #pragma acc declare copyin (mtau)
 #define minf minf_napIn
  double minf = 0;
+ #pragma acc declare copyin (minf)
+ 
+static void _acc_globals_update() {
+ #pragma acc update device (eNa) if(nrn_threads->compute_gpu)
+ #pragma acc update device (hinf) if(nrn_threads->compute_gpu)
+ #pragma acc update device (mtau) if(nrn_threads->compute_gpu)
+ #pragma acc update device (minf) if(nrn_threads->compute_gpu)
+ }
  
 #if 0 /*BBCORE*/
  /* some parameters have upper and lower limits */
@@ -129,8 +154,6 @@ extern Memb_func* memb_func;
  static double h0 = 0;
  static double m0 = 0;
  static double v = 0;
- 
-#if 0 /*BBCORE*/
  /* connect global user variables to hoc */
  static DoubScal hoc_scdoub[] = {
  "eNa_napIn", &eNa_napIn,
@@ -142,14 +165,12 @@ extern Memb_func* memb_func;
  static DoubVec hoc_vdoub[] = {
  0,0,0
 };
- 
-#endif /*BBCORE*/
  static double _sav_indep;
  static void nrn_alloc(double*, Datum*, int);
-static void  nrn_init(_NrnThread*, _Memb_list*, int);
-static void nrn_state(_NrnThread*, _Memb_list*, int);
- static void nrn_cur(_NrnThread*, _Memb_list*, int);
- static void  nrn_jacob(_NrnThread*, _Memb_list*, int);
+void  nrn_init(_NrnThread*, _Memb_list*, int);
+void nrn_state(_NrnThread*, _Memb_list*, int);
+ void nrn_cur(_NrnThread*, _Memb_list*, int);
+ void  nrn_jacob(_NrnThread*, _Memb_list*, int);
  /* connect range variables in _p that hoc is supposed to know about */
  static const char *_mechanism[] = {
  "6.2.0",
@@ -207,6 +228,7 @@ extern void _cvode_abstol( Symbol**, double*, int);
   hoc_register_dparam_semantics(_mechtype, 0, "na_ion");
   hoc_register_dparam_semantics(_mechtype, 1, "na_ion");
   hoc_register_dparam_semantics(_mechtype, 2, "na_ion");
+ 	hoc_register_var(hoc_scdoub, hoc_vdoub, NULL);
  }
 static int _reset;
 static char *modelname = "nap";
@@ -218,8 +240,15 @@ static void _modl_cleanup(){ _match_recurse=1;}
 static int trates(double);
  
 static int _ode_spec1(_threadargsproto_);
-static int _ode_matsol1(_threadargsproto_);
- static int _slist1[2], _dlist1[2];
+/*static int _ode_matsol1(_threadargsproto_);*/
+ 
+#define _slist1 _slist1_napIn
+int* _slist1;
+#pragma acc declare create(_slist1)
+
+#define _dlist1 _dlist1_napIn
+int* _dlist1;
+#pragma acc declare create(_dlist1)
  static inline int states(_threadargsproto_);
  
 /*CVODE*/
@@ -284,14 +313,16 @@ static void initmodel() {
 }
 
 static void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){
-double _v; int* _ni; int _iml, _cntml;
+double _v; int* _ni; int _iml, _cntml_padded, _cntml_actual;
 #if CACHEVEC
     _ni = _ml->_nodeindices;
 #endif
-_cntml = _ml->_nodecount;
-for (_iml = 0; _iml < _cntml; ++_iml) {
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
     _v = _vec_v[_nd_idx];
+    _PRCELLSTATE_V
  v = _v;
   ena = _ion_ena;
  initmodel();
@@ -308,14 +339,16 @@ static double _nrn_current(double _v){double _current=0.;v=_v;{ {
 }
 
 static void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type){
-int* _ni; double _rhs, _v; int _iml, _cntml;
+int* _ni; double _rhs, _v; int _iml, _cntml_padded, _cntml_actual;
 #if CACHEVEC
     _ni = _ml->_nodeindices;
 #endif
-_cntml = _ml->_nodecount;
-for (_iml = 0; _iml < _cntml; ++_iml) {
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
     _v = _vec_v[_nd_idx];
+    _PRCELLSTATE_V
   ena = _ion_ena;
  _g = _nrn_current(_v + .001);
  	{ double _dina;
@@ -330,27 +363,31 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 }}
 
 static void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type){
-int* _ni; int _iml, _cntml;
+int* _ni; int _iml, _cntml_padded, _cntml_actual;
 #if CACHEVEC
     _ni = _ml->_nodeindices;
 #endif
-_cntml = _ml->_nodecount;
-for (_iml = 0; _iml < _cntml; ++_iml) {
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize;
 	VEC_D(_ni[_iml]) += _g;
  
 }}
 
 static void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type){
-double _v = 0.0; int* _ni; int _iml, _cntml;
+double _v = 0.0; int* _ni; int _iml, _cntml_padded, _cntml_actual;
 #if CACHEVEC
     _ni = _ml->_nodeindices;
 #endif
-_cntml = _ml->_nodecount;
-for (_iml = 0; _iml < _cntml; ++_iml) {
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
     _v = _vec_v[_nd_idx];
+    _PRCELLSTATE_V
  v=_v;
+ _PRCELLSTATE_V
 {
   ena = _ion_ena;
  { error =  states();
@@ -363,10 +400,17 @@ static void terminal(){}
 
 static void _initlists() {
  int _i; static int _first = 1;
- int _cntml=0;
+ int _cntml_actual=1;
+ int _cntml_padded=1;
  int _iml=0;
   if (!_first) return;
+ 
+ _slist1 = (int*)malloc(sizeof(int)*2);
+ _dlist1 = (int*)malloc(sizeof(int)*2);
  _slist1[0] = &(m) - _p;  _dlist1[0] = &(Dm) - _p;
  _slist1[1] = &(h) - _p;  _dlist1[1] = &(Dh) - _p;
+ #pragma acc enter data copyin(_slist1[0:2])
+ #pragma acc enter data copyin(_dlist1[0:2])
+
 _first = 0;
 }

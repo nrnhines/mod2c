@@ -238,6 +238,8 @@ extern Symbol
 					 * not already done. */
 #include "nmodlfunc.h"
 
+extern char suffix[];
+
 extern char     finname[],	/* the input file prefix */
                 buf[];		/* general purpose temporary buffer */
 
@@ -251,6 +253,7 @@ extern List
 		*procfunc,
 		*initlist,
 		*firstlist,
+		*acc_present_list,
 		*plotlist;
 
 extern FILE

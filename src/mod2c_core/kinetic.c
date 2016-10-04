@@ -344,9 +344,22 @@ void massagekinetic(q1, q2, q3, q4, sensused) /*KINETIC NAME stmtlist '}'*/
 	numlist++;
 	fun->u.i = numlist;
 	
+#if 0
 	Sprintf(buf, "static int %s();\n", SYM(q2)->name);
 	Linsertstr(procfunc, buf);
 	replacstr(q1, "\nstatic int");
+#else
+	Sprintf(buf,
+	  "\n"
+	  "/* _kinetic_ %s %s */\n"
+	  "#ifndef INSIDE_NMODL\n"
+	  "#define INSIDE_NMODL\n"
+	  "#endif\n"
+	  "#include \"_kinderiv.h\"\n"
+	  , SYM(q2)->name, suffix);
+	Linsertstr(procfunc, buf);
+	replacstr(q1, "\nint");
+#endif
 	qv = insertstr(q3, "()\n");
 #if VECTORIZE
 if (vectorize) {
@@ -443,9 +456,20 @@ Sprintf(buf, "{int _reset=0;\n");
 		diag("KINETIC contains no reactions", (char *)0);
 	}
 	fun->used = count;
-	Sprintf(buf, "static int _slist%d[%d], _dlist%d[%d]; static double *_temp%d;\n",
-		numlist, count*(1 + sens_parm), numlist,
-		count*(1 + sens_parm), numlist);
+	Sprintf(buf, ", _slist%d[0:%d], _dlist%d[0:%d]",
+	  numlist, count, numlist, count);
+	Lappendstr(acc_present_list, buf);
+	Sprintf(buf,
+	  "\n#define _slist%d _slist%d%s\n"
+	  "int* _slist%d;\n"    
+	  "#pragma acc declare create(_slist%d)\n"
+	  "\n#define _dlist%d _dlist%d%s\n"
+	  "int* _dlist%d;\n"   
+	  "#pragma acc declare create(_dlist%d)\n"
+	  , numlist, numlist, suffix, numlist, numlist
+	  , numlist, numlist, suffix, numlist, numlist
+	  );
+
 	Linsertstr(procfunc, buf);
 	insertstr(q4, "  } return _reset;\n");
 	movelist(q1, q4, procfunc);
@@ -773,6 +797,12 @@ void kinetic_implicit(fun, dt, mname)
 		vectorize_substitute(q, buf);
 		sprintf(buf, "  _nrn_destroy_sparseobj_thread(_thread[_spth%d]._pvoid);\n", fun->u.i);
 		lappendstr(thread_cleanup_list, buf);
+#if 0
+		Sprintf(buf, "extern void* nrn_cons_sparseobj(int(*)(void*, double*, _threadargsproto_), int, _Memb_list*, _threadargsproto_);\n");
+#else
+		Sprintf(buf, "extern void* nrn_cons_sparseobj(int, int, _Memb_list*, _threadargsproto_);\n");
+#endif
+		linsertstr(procfunc, buf);
 	}
     }	
 	if (rlst->sens_parm) {
@@ -799,7 +829,7 @@ for(_i=%d;_i<%d;_i++){\n",
 #endif
     NOT_CVODE_FLAG {
 	Sprintf(buf, "\
-	_RHS%d(_i) = -_dt1*(_p[_slist%d[_i]] - _p[_dlist%d[_i]]);\n\
+	_RHS%d(_i) = -_dt1*(_p[_slist%d[_i]*_STRIDE] - _p[_dlist%d[_i]*_STRIDE]);\n\
 	_MATELM%d(_i, _i) = _dt1;\n",
 		fun->u.i, fun->u.i, fun->u.i, fun->u.i);
 	qv = insertstr(rlst->position, buf);
@@ -931,11 +961,11 @@ Insertstr(rlst->position, "}");
 #if VECTORIZE
 	vectorize_substitute(qv, "");
 #endif
-	Sprintf(buf, "\n#define _RHS%d(_arg) _coef%d[_arg + 1]\n",
+	Sprintf(buf, "\n#define _RHS%d(_arg) _coef%d[(_arg + 1)]\n",
 		fun->u.i, fun->u.i);
 	qv = linsertstr(procfunc, buf);
 #if VECTORIZE
-	Sprintf(buf, "\n#define _RHS%d(_arg) _rhs[_arg+1]\n",
+	Sprintf(buf, "\n#define _RHS%d(_arg) _rhs[(_arg+1)*_STRIDE]\n",
 		fun->u.i);
 	vectorize_substitute(qv, buf);
 #endif
@@ -943,7 +973,7 @@ Insertstr(rlst->position, "}");
 	*(_getelm(_row + 1, _col + 1))\n", fun->u.i);
 	qv = linsertstr(procfunc, buf);
 #if VECTORIZE
-	Sprintf(buf, "\n#define _MATELM%d(_row,_col) *(_nrn_thread_getelm(_so, _row + 1, _col + 1))\n", fun->u.i);
+	Sprintf(buf, "\n#define _MATELM%d(_row,_col) _nrn_thread_getelm(_so, _row + 1, _col + 1, _iml)[_iml]\n", fun->u.i);
 	vectorize_substitute(qv, buf);
 #endif
 	{static int first = 1; if (first) {
@@ -951,7 +981,10 @@ Insertstr(rlst->position, "}");
 		Sprintf(buf,"extern double *_getelm();\n");
 		qv = linsertstr(procfunc, buf);
 #if VECTORIZE
-		Sprintf(buf,"extern double *_nrn_thread_getelm();\n");
+		Sprintf(buf,
+		  "\n#pragma acc routine seq\n"
+		  "extern double *_nrn_thread_getelm(void*, int, int, int);\n"
+		  );
 		vectorize_substitute(qv, buf);
 #endif
 	}}
@@ -1182,7 +1215,7 @@ static void kinlist(fun, rlst)
 	Symbol *fun;
 	Rlist *rlst;
 {
-	int i;
+	int i, count;
 	Symbol *s;
 	Item* qv;
 	
@@ -1191,6 +1224,22 @@ static void kinlist(fun, rlst)
 	}
 	rlst->slist_decl = 1;
 	/* put slist and dlist in initlist */
+
+	count = 0;
+	for (i=0; i < rlst->nsym; i++) {
+		s = rlst->symorder[i];
+		if (s->subtype & ARRAY) { int dim = s->araydim;
+			count += dim;
+		}else{
+			count++;
+		}
+	}
+	Sprintf(buf,
+	  "\n _slist%d = (int*)malloc(sizeof(int)*%d);\n"
+	  " _dlist%d = (int*)malloc(sizeof(int)*%d);\n"
+	  , fun->u.i, count, fun->u.i, count);
+	Lappendstr(initlist, buf);
+
 	for (i=0; i < rlst->nsym; i++) {
 		s = rlst->symorder[i];
 #if CVODE
@@ -1241,6 +1290,12 @@ if (vectorize){
 }
 		s->used = 0;
 	}
+	Sprintf(buf,
+	 "#pragma acc enter data copyin(_slist%d[0:%d])\n"
+	 " #pragma acc enter data copyin(_dlist%d[0:%d])\n\n"
+	 , fun->u.i, count, fun->u.i, count);
+	Lappendstr(initlist, buf);
+
 }
 
 /* for now we only check CONSERVE and COMPARTMENT */
