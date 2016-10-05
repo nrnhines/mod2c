@@ -35,6 +35,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 static List *deriv_imp_list;	/* list of derivative blocks that were
 	translated in form suitable for the derivimplicit method */
+static List *deriv_imp_really; /* derivative blocks solved by derivimplicit */
 static char Derivimplicit[] = "derivimplicit";	
 
 extern Symbol *indepsym;
@@ -49,6 +50,7 @@ extern int assert_threadsafe;
 extern int thread_data_index;
 extern List* thread_mem_init_list;
 extern List* thread_cleanup_list;
+extern List* newtonspace_list;
 #endif
 
 #if CVODE
@@ -58,6 +60,7 @@ static void cvode_diffeq();
 static List* cvode_diffeq_list, *cvode_eqn;
 static int cvode_cnexp_possible;
 #endif
+int derivimplic_listnum;
 
 void solv_diffeq(qsol, fun, method, numeqn, listnum, steadystate, btype)
 	Item *qsol;
@@ -66,7 +69,6 @@ void solv_diffeq(qsol, fun, method, numeqn, listnum, steadystate, btype)
 	int btype;
 {
 	char *maxerr_str, dindepname[50];
-	char deriv1_advance[30], deriv2_advance[30];
 	char ssprefix[8];
 	
 	if (method && strcmp(method->name, "cnexp") == 0) {
@@ -113,33 +115,60 @@ if (deriv_imp_list) {	/* make sure deriv block translation matches method */
  precede the DERIVATIVE block\n",
 " and all SOLVEs using that block must use the derivimplicit method\n");
 	}
-	Sprintf(deriv1_advance, "_deriv%d_advance = 1;\n", listnum);
-	Sprintf(deriv2_advance, "_deriv%d_advance = 0;\n", listnum);
-	Sprintf(buf, "static int _deriv%d_advance = 0;\n", listnum);
+	derivimplic_listnum = listnum;	
+	Sprintf(buf, "static int _deriv%d_advance = 1;\n", listnum);
 	q = linsertstr(procfunc, buf);
 	Sprintf(buf, "\n#define _deriv%d_advance _thread[%d]._i\n\
-#define _dith%d %d\n#define _recurse _thread[%d]._i\n#define _newtonspace%d _thread[%d]._pvoid\nextern void* nrn_cons_newtonspace(int);\n\
-", listnum, thread_data_index, listnum, thread_data_index+1, thread_data_index+2,
-listnum, thread_data_index+3);
+#define _dith%d %d\n#define _newtonspace%d _thread[%d]._pvoid\nextern void* nrn_cons_newtonspace(int, int);\n\
+", listnum, thread_data_index, listnum, thread_data_index+1, listnum, thread_data_index+2);
+
 	vectorize_substitute(q, buf);
-	Sprintf(buf, "  _thread[_dith%d]._pval = (double*)ecalloc(%d, sizeof(double));\n", listnum, 2*numeqn);
+	Sprintf(buf, "  _thread[_dith%d]._pval = NULL;", listnum);
 	lappendstr(thread_mem_init_list, buf);
-	Sprintf(buf, "  _newtonspace%d = nrn_cons_newtonspace(%d);\n", listnum, numeqn);
-	lappendstr(thread_mem_init_list, buf);
+	Sprintf(buf,
+          "  if (!_newtonspace%d) {\n"
+          "    _newtonspace%d = nrn_cons_newtonspace(%d, _cntml_padded);\n"
+          "    _thread[_dith%d]._pval = makevector(2*%d*_cntml_padded*sizeof(double));\n"
+	  "    #ifdef _OPENACC\n"
+	  "    if (_nt->compute_gpu) {\n"
+	  "      void* _d_ns = (void*)acc_deviceptr(_newtonspace%d);\n"
+	  "      double* _d_pd = (double*)acc_copyin(_thread[_dith%d]._pval,2*%d*_cntml_padded* sizeof(double));\n"
+	  "      ThreadDatum* _d_td = (ThreadDatum*)acc_deviceptr(_thread);\n"
+	  "      acc_memcpy_to_device(&(_d_td[%d]._pvoid), &_d_ns, sizeof(void*));\n"
+	  "      acc_memcpy_to_device(&(_d_td[_dith%d]._pval), &_d_pd, sizeof(double*));\n"
+	  "    }\n"
+	  "    #endif\n"
+          "  }\n"
+          , listnum, listnum, numeqn, listnum, numeqn
+	  , listnum, listnum, numeqn, thread_data_index+2, listnum
+	  );
+	lappendstr(newtonspace_list, buf);
 	Sprintf(buf, "  free((void*)(_thread[_dith%d]._pval));\n", listnum);
 	lappendstr(thread_cleanup_list, buf);
 	Sprintf(buf, "  nrn_destroy_newtonspace(_newtonspace%d);\n", listnum);
 	lappendstr(thread_cleanup_list, buf);
-	thread_data_index += 4;
-}else{
-	Strcpy(deriv1_advance, "");
-	Strcpy(deriv2_advance, "");
+	thread_data_index += 3;
 }
-Sprintf(buf,"%s %s%s(_ninits, %d, _slist%d, _dlist%d, _p, &%s, %s, %s, &_temp%d%s);\n%s",
-deriv1_advance, ssprefix,
-method->name, numeqn, listnum, listnum, indepsym->name, dindepname, fun->name, listnum, maxerr_str,
-deriv2_advance);
+Sprintf(buf," %s%s(_ninits, %d, _slist%d, _dlist%d, _p, &%s, %s, %s, &_temp%d%s);",
+ssprefix,
+method->name, numeqn, listnum, listnum, indepsym->name, dindepname,
+fun->name, listnum, maxerr_str);
 	}else{
+	  Sprintf(buf,
+	    "  if (!_thread[_spth%d]._pvoid) {\n"
+	    "    _thread[_spth%d]._pvoid = nrn_cons_sparseobj(_kinetic_%s%s, %d, _ml, _threadargs_);\n"
+	    "    #ifdef _OPENACC\n"
+	    "    if (_nt->compute_gpu) {\n"
+	    "      void* _d_so = (void*) acc_deviceptr(_thread[_spth%d]._pvoid);\n"
+	    "      ThreadDatum* _d_td = (ThreadDatum*)acc_deviceptr(_thread);\n"
+	    "      acc_memcpy_to_device(&(_d_td[_spth%d]._pvoid), &_d_so, sizeof(void*));\n"
+	    "    }\n"
+	    "    #endif\n"
+	    "  }\n"
+	    , listnum, listnum, fun->name, suffix, numeqn
+	    , listnum, listnum
+	    );
+	  lappendstr(newtonspace_list, buf);
 Sprintf(buf, "%s%s(&_sparseobj%d, %d, _slist%d, _dlist%d, _p, &%s, %s, %s\
 ,&_coef%d, _linmat%d);\n",
 ssprefix, method->name, listnum, numeqn, listnum, listnum, indepsym->name,
@@ -148,18 +177,40 @@ dindepname, fun->name, listnum, listnum);
 	replacstr(qsol, buf);
 #if VECTORIZE
 	if (method->subtype & DERF) { /* derivimplicit */
-Sprintf(buf,"%s %s%s_thread(%d, _slist%d, _dlist%d, _p, %s, _ppvar, _thread, _nt);\n%s",
-deriv1_advance, ssprefix, method->name,
-numeqn, listnum, listnum, fun->name,
-deriv2_advance);
+Sprintf(buf,
+"\n"
+"  #if !defined(_derivimplic_%s%s)\n"
+"    #define _derivimplic_%s%s 0\n"
+"  #endif\n"
+"  %s%s_thread(%d, _slist%d, _dlist%d, _derivimplic_%s%s, _threadargs_);\n",
+fun->name, suffix, fun->name, suffix,
+ssprefix, method->name,
+numeqn, listnum, listnum, fun->name, suffix);
 	vectorize_substitute(qsol, buf);
+	Sprintf(buf,
+	  "\n"
+	  "#pragma acc routine seq\n"
+	  "extern int %s%s_thread(int, int*, int*, int, _threadargsproto_);\n"
+	  , ssprefix, method->name);
+	linsertstr(procfunc, buf);
 	}else{ /* kinetic */
    if (vectorize) {
-Sprintf(buf, "%s%s_thread(&_thread[_spth%d]._pvoid, %d, _slist%d, _dlist%d, _p, &%s, %s, %s\
-, _linmat%d, _ppvar, _thread, _nt);\n",
+Sprintf(buf,
+"\n"
+"  #if !defined(_kinetic_%s%s)\n"
+"    #define _kinetic_%s%s 0\n"
+"  #endif\n"
+"  %s%s_thread(_thread[_spth%d]._pvoid, %d, _slist%d, _dlist%d, &%s, %s, _kinetic_%s%s, _linmat%d, _threadargs_);\n",
+fun->name, suffix, fun->name, suffix,
 ssprefix, method->name, listnum, numeqn, listnum, listnum, indepsym->name,
-dindepname, fun->name, listnum);
+dindepname, fun->name, suffix, listnum);
 	vectorize_substitute(qsol, buf);
+	Sprintf(buf,
+	  "\n"
+	  "#pragma acc routine seq\n"
+	  "extern int %s%s_thread(void*, int, int*, int*, double*, double, int, int, _threadargsproto_);\n"
+	  , ssprefix, method->name);
+	linsertstr(procfunc, buf);
    }
 #endif
 	}
@@ -415,6 +466,15 @@ void add_deriv_imp_list(name)
 	Lappendstr(deriv_imp_list, name);
 }
 
+void add_deriv_imp_really(name)
+	char *name;
+{
+	if (!deriv_imp_really) {
+		deriv_imp_really = newlist();
+	}
+	Lappendstr(deriv_imp_really, name);
+}
+
 static List *deriv_used_list; /* left hand side derivatives of diffeqs */
 static List *deriv_state_list;	/* states of the derivative equations */
 
@@ -442,7 +502,7 @@ static int matchused = 0;	/* set when MATCH seen */
 void massagederiv(q1, q2, q3, q4, sensused)
 	Item *q1, *q2, *q3, *q4;
 {
-	int count = 0, deriv_implicit, solve_seen;
+	int count = 0, deriv_implicit, deriv_implicit_really, solve_seen;
 	char units[50];
 	Item *qs, *q, *mixed_eqns();
 	Symbol *s, *derfun, *state;
@@ -451,17 +511,7 @@ void massagederiv(q1, q2, q3, q4, sensused)
 	if (!massage_list_) { massage_list_ = newlist(); }
 	Lappendsym(massage_list_, SYM(q2));
 	
-	/* all this junk is still in the intoken list */
-	Sprintf(buf, "static inline int %s(_threadargsproto_);\n", SYM(q2)->name);
-	Linsertstr(procfunc, buf);
-	replacstr(q1, "\nstatic int"); q = insertstr(q3, "() {_reset=0;\n");
 	derfun = SYM(q2);
-	vectorize_substitute(q, "(_threadargsproto_) {int _reset=0; int error = 0;\n");
-
-	if (derfun->subtype & DERF && derfun->u.i) {
-		diag("DERIVATIVE merging not implemented", (char *)0);
-	}
-
 	/* check if we are to translate using derivimplicit method */
 	deriv_implicit = 0;
 	if (deriv_imp_list) ITERATE(q, deriv_imp_list) {
@@ -470,12 +520,55 @@ void massagederiv(q1, q2, q3, q4, sensused)
 			break;
 		}
 	}
+
+	deriv_implicit_really = 0;
+	if (deriv_imp_really) ITERATE(q, deriv_imp_really) {
+		if (strcmp(derfun->name, STR(q)) == 0) {
+			deriv_implicit_really = 1;
+			break;
+		}
+	}
+
+	/* all this junk is still in the intoken list */
+	Sprintf(buf, "static inline int %s(_threadargsproto_);\n", SYM(q2)->name);
+	if (deriv_implicit_really == 1) {
+	  Sprintf(buf, "extern int %s(_threadargsproto_);\n", SYM(q2)->name);
+	}
+	Linsertstr(procfunc, buf);
+	if (deriv_implicit_really == 1) {
+	  replacstr(q1, "\nint"); q = insertstr(q3, "() {_reset=0;\n");
+	}else{
+	  replacstr(q1, "\nstatic int"); q = insertstr(q3, "() {_reset=0;\n");
+	}
+	vectorize_substitute(q, "(_threadargsproto_) {int _reset=0; int error = 0;\n");
+
+	if (derfun->subtype & DERF && derfun->u.i) {
+		diag("DERIVATIVE merging not implemented", (char *)0);
+	}
+
 	numlist++;
 	derfun->u.i = numlist;
 	derfun->subtype |= DERF;
 	if (!deriv_used_list) {
 		diag("No derivative equations in DERIVATIVE block", (char*)0);
 	}
+
+	count = 0;
+	ITERATE(qs, deriv_used_list) {
+		s = SYM(qs);
+		FORALL(state, s) {
+			count++;
+		}
+	}
+	Sprintf(buf,
+	  "\n"
+	  " _slist%d = (int*)malloc(sizeof(int)*%d);\n"
+	  " _dlist%d = (int*)malloc(sizeof(int)*%d);\n"
+	  , numlist, count, numlist, count
+	);
+	Lappendstr(initlist, buf);
+
+	count = 0;
 	ITERATE(qs, deriv_used_list) {
 		s = SYM(qs);
 		if (!(s->subtype & DEP) && !(s->subtype & STAT)) {
@@ -520,12 +613,31 @@ if (s->subtype & ARRAY) { int dim = s->araydim;
 }
 		}
 	}
+
+	Sprintf(buf,
+	  "#pragma acc enter data copyin(_slist%d[0:%d])\n"
+	  " #pragma acc enter data copyin(_dlist%d[0:%d])\n\n"
+	  , numlist, count, numlist, count);
+	Lappendstr(initlist, buf);
+
 	if (count == 0) {
 		diag("DERIVATIVE contains no derivatives", (char *)0);
 	}
 	derfun->used = count;
-Sprintf(buf, "static int _slist%d[%d], _dlist%d[%d];\n",
-   numlist, count*(1 + 2*sens_parm), numlist, count*(1 + 2*sens_parm));
+	Sprintf(buf, ", _slist%d[0:%d], _dlist%d[0:%d]",
+	  numlist, count, numlist, count);
+	Lappendstr(acc_present_list, buf);
+	Sprintf(buf,
+
+	  "\n#define _slist%d _slist%d%s\n"
+	  "int* _slist%d;\n"
+	  "#pragma acc declare create(_slist%d)\n"
+	  "\n#define _dlist%d _dlist%d%s\n"
+	  "int* _dlist%d;\n"
+	  "#pragma acc declare create(_dlist%d)\n"
+	  , numlist, numlist, suffix, numlist, numlist
+	  , numlist, numlist, suffix, numlist, numlist
+	  );
 		Linsertstr(procfunc, buf);
 	
 #if CVODE
@@ -613,11 +725,11 @@ if (_deriv%d_advance) {\n", count, numlist);
 		q = insertsym(q4, sp);
 		eqnqueue(q);
 Sprintf(buf,
-"_p[_dlist%d[_id]] - (_p[_slist%d[_id]] - _savstate%d[_id])/d%s;\n",
+"_p[_dlist%d[_id]*_STRIDE] - (_p[_slist%d[_id]*_STRIDE] - _savstate%d[_id*_STRIDE])/d%s;\n",
    numlist, numlist, numlist, indepsym->name);
 		Insertstr(q4, buf);
 Sprintf(buf,
-"}else{\n_dlist%d[++_counte] = _p[_slist%d[_id]] - _savstate%d[_id];}}}\n",
+"}else{\n_dlist%d[(++_counte)*_STRIDE] = _p[_slist%d[_id]*_STRIDE] - _savstate%d[_id*_STRIDE];}}}\n",
    numlist+1, numlist, numlist);
 		Insertstr(q4, buf);
 	}else{
@@ -631,7 +743,7 @@ Sprintf(buf,
 	q = mixed_eqns(q2, q3, q4); /* numlist now incremented */
 	if (deriv_implicit) {
 		Sprintf(buf,
-"{int _id; for(_id=0; _id < %d; _id++) { _savstate%d[_id] = _p[_slist%d[_id]];}}\n",
+"{int _id; for(_id=0; _id < %d; _id++) { _savstate%d[_id*_STRIDE] = _p[_slist%d[_id]*_STRIDE];}}\n",
 		count, derfun->u.i, derfun->u.i);
 		Insertstr(q, buf);
 	}

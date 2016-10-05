@@ -16,6 +16,7 @@ void vectorize_substitute();
 void vectorize_do_substitute();
 void solv_diffeq();
 void add_deriv_imp_list();
+void add_deriv_imp_really();
 void deriv_used();
 void massagederiv();
 void matchinitial();

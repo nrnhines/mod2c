@@ -117,6 +117,22 @@ static int nonlin_common(q4, sensused)	/* used by massagenonlin() and mixed_eqns
 	Symbol *s;
 
 	using_array=0;
+
+	counts =0;
+	SYMITER_STAT {
+		if (s->used) {
+			if (s->subtype & ARRAY) {int dim = s->araydim;
+				counts += dim;
+			}else{
+				counts++;
+			}
+		}
+	}
+	Sprintf(buf, "_slist%d = (int*)malloc(sizeof(int)*%d);\n",
+	  numlist, counts);
+	Lappendstr(initlist, buf);
+
+	counts = 0;
 	SYMITER_STAT {
 		if (s->used) {
 			s->varnum = counts;
@@ -140,6 +156,9 @@ static int nonlin_common(q4, sensused)	/* used by massagenonlin() and mixed_eqns
 			}
 		}
 	}
+	Sprintf(buf, "#pragma acc enter data copyin(_slist%d[0:%d])\n\n",
+	  numlist, counts);
+	Lappendstr(initlist, buf);
 
 	ITERATE(lq, eqnq) {
 		char *eqtype = SYM(ITM(lq))->name;
@@ -151,10 +170,10 @@ static int nonlin_common(q4, sensused)	/* used by massagenonlin() and mixed_eqns
 		} else if (eqtype[0] == 'D') {
 			/* derivative equations using implicit method */
 			int count_deriv = SYM(ITM(lq))->araydim;
-			Sprintf(buf, "_dlist%d[++_counte] =", numlist);
+			Sprintf(buf, "_dlist%d[(++_counte)*_STRIDE] =", numlist);
 			counte += count_deriv;
 		}else{
-			Sprintf(buf, "_dlist%d[++_counte] =", numlist);
+			Sprintf(buf, "_dlist%d[(++_counte)*_STRIDE] =", numlist);
 			counte++;
 		}
 		replacstr(ITM(lq), buf);
@@ -176,11 +195,16 @@ Sprintf(buf, "if(_counte != %d) printf( \"Number of equations, %%d,\
 		diag("NONLINEAR contains no equations", (char *)0);
 	}
 	freeqnqueue();
+	Sprintf(buf, ", _slist%d[0:%d]", numlist, counts*(1 + sens_parm));
+	Lappendstr(acc_present_list, buf);
 Sprintf(buf, "static int _slist%d[%d]; static double _dlist%d[%d];\n",
 numlist, counts*(1 + sens_parm), numlist, counts);
 	q = linsertstr(procfunc, buf);
-Sprintf(buf, "static int _slist%d[%d];\n",
-numlist, counts*(1 + sens_parm));
+	Sprintf(buf,
+	  "\n#define _slist%d _slist%d%s\n"
+	  "int* _slist%d;\n"
+	  "#pragma acc declare create(_slist%d)\n"
+	  , numlist, numlist, suffix, numlist, numlist);
 	vectorize_substitute(q, buf);	
 	return counts;
 }
@@ -199,21 +223,51 @@ Item *mixed_eqns(q2, q3, q4)	/* name, '{', '}' */
 	the header stuff */
 	numlist++;
 	counts = nonlin_common(q4, 0);
-	Insertstr(q4, "}");
-	q = insertstr(q3, "{ static int _recurse = 0;\n int _counte = -1;\n");
-	sprintf(buf, "{ double* _savstate%d = _thread[_dith%d]._pval;\n\
- double* _dlist%d = _thread[_dith%d]._pval + %d;\n int _counte = -1;\n",
+	q = insertstr(q3, "{\n");
+	sprintf(buf, "{ double* _savstate%d = (double*)_thread[_dith%d]._pval;\n\
+ double* _dlist%d = (double*)(_thread[_dith%d]._pval) + (%d*_cntml_padded);\n",
 numlist-1, numlist-1,
 numlist, numlist-1, counts);
 	vectorize_substitute(q, buf);
-	Insertstr(q3, "if (!_recurse) {\n _recurse = 1;\n");
-	Sprintf(buf, "error = newton(%d,_slist%d, _p, %s, _dlist%d);\n",
-		counts, numlist, SYM(q2)->name, numlist);
+
+	Sprintf(buf, "error = newton(%d,_slist%d, _p, _cb_%s%s, _dlist%d);\n",
+		counts, numlist, SYM(q2)->name, suffix, numlist);
 	qret = insertstr(q3, buf);
-	Sprintf(buf, "error = nrn_newton_thread(_newtonspace%d, %d,_slist%d, _p, %s, _dlist%d, _ppvar, _thread, _nt);\n",
-		numlist-1, counts, numlist, SYM(q2)->name, numlist);
+	Sprintf(buf, 
+	  "#pragma acc routine(nrn_newton_thread) seq\n"
+#if 0
+	  "_reset = nrn_newton_thread(_newtonspace%d, %d,_slist%d, _cb_%s%s, _dlist%d,  _threadargs_);\n"
+#else
+	  "_reset = nrn_newton_thread(_newtonspace%d, %d,_slist%d, _derivimplic_%s%s, _dlist%d,  _threadargs_);\n"
+#endif
+	  , numlist-1, counts, numlist, SYM(q2)->name, suffix, numlist);
 	vectorize_substitute(qret, buf);
-	Insertstr(q3, "_recurse = 0; if(error) {abort_run(error);}}\n");
+	Insertstr(q3, "/*if(_reset) {abort_run(_reset);}*/ }\n");
+	Sprintf(buf,
+	  "extern int _cb_%s%s(_threadargsproto_);\n"
+	  , SYM(q2)->name, suffix);
+	Linsertstr(procfunc, buf);
+
+	Sprintf(buf,
+	  "\n"
+	  "/* _derivimplic_ %s %s */\n"
+	  "#ifndef INSIDE_NMODL\n"
+	  "#define INSIDE_NMODL\n"
+	  "#endif\n"
+	  "#include \"_kinderiv.h\"\n"
+	  , SYM(q2)->name, suffix);
+	Linsertstr(procfunc, buf);
+
+	Sprintf(buf, "\n  return _reset;\n}\n\nint _cb_%s%s (_threadargsproto_) {  int _reset=0;\n", SYM(q2)->name, suffix);
+	Insertstr(q3, buf);
+	q = insertstr(q3, "{ int _counte = -1;\n");
+	sprintf(buf, "{ double* _savstate%d = (double*)_thread[_dith%d]._pval;\n\
+ double* _dlist%d = (double*)(_thread[_dith%d]._pval) + (%d*_cntml_padded);\n int _counte = -1;\n",
+numlist-1, numlist-1,
+numlist, numlist-1, counts);
+	vectorize_substitute(q, buf);
+
+	Insertstr(q4, "\n  }");
 	return qret;
 }
 

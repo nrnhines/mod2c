@@ -120,6 +120,7 @@ diag("The SOLVE statement must be before the DERIVATIVE block for ", SYM(lq)->na
 		Lappendsym(solvq, SYM(q2));
 		if (strcmp(SYM(q2)->name, "derivimplicit") == 0) {
 			add_deriv_imp_list(SYM(q1)->name);
+			add_deriv_imp_really(SYM(q1)->name);
 		}
 		if (strcmp(SYM(q2)->name, "cnexp") == 0) {
 			SYM(q2)->name = stralloc("derivimplicit", SYM(q2)->name);

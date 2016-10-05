@@ -32,6 +32,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "parse1.h"
 
 extern List    *firstlist;
+extern List    *units_def_for_acc;
 extern List    *syminorder;
 Symbol         *semi, *beginblk, *endblk;
 List           *intoken;
@@ -273,6 +274,8 @@ void init()
 	plotlist = newlist();
 	constructorfunc = newlist();
 	destructorfunc = newlist();
+	units_def_for_acc = newlist();
+	acc_present_list = newlist();
 #if NMODL
 	nrninit();
 #endif

@@ -10,6 +10,10 @@
 #include "coreneuron/nrnconf.h"
 #include "coreneuron/nrnoc/multicore.h"
 
+#if defined(_OPENACC) && !defined(DISABLE_OPENACC)
+#include "coreneuron/nrniv/nrn_acc_manager.h"
+
+#endif
 #include "coreneuron/utils/randoms/nrnran123.h"
 
 #include "coreneuron/nrnoc/md2redef.h"
@@ -29,15 +33,29 @@ extern double hoc_Exp(double);
 #define LAYOUT 1
 #define _STRIDE 1
  
+
+#if !defined(NET_RECEIVE_BUFFERING)
+#define NET_RECEIVE_BUFFERING 1
+#endif
+ 
 #define nrn_init _nrn_init__NMDA10_2
 #define nrn_cur _nrn_cur__NMDA10_2
 #define _nrn_current _nrn_current__NMDA10_2
 #define nrn_jacob _nrn_jacob__NMDA10_2
 #define nrn_state _nrn_state__NMDA10_2
-#define _net_receive _net_receive__NMDA10_2 
-#define kstates kstates__NMDA10_2 
-#define release release__NMDA10_2 
-#define rates rates__NMDA10_2 
+#define initmodel initmodel__NMDA10_2
+#define _net_receive _net_receive__NMDA10_2
+#define nrn_state_launcher nrn_state_NMDA10_2_launcher
+#define nrn_cur_launcher nrn_cur_NMDA10_2_launcher
+#define nrn_jacob_launcher nrn_jacob_NMDA10_2_launcher 
+#if NET_RECEIVE_BUFFERING
+#define _net_buf_receive _net_buf_receive_NMDA10_2
+static void _net_buf_receive(_NrnThread*);
+#endif
+ 
+#define kstates kstates_NMDA10_2 
+#define release release_NMDA10_2 
+#define rates rates_NMDA10_2 
  
 #define _threadargscomma_ /**/
 #define _threadargsprotocomma_ /**/
@@ -112,7 +130,7 @@ extern "C" {
  
 #endif /*BBCORE*/
  static int _mechtype;
-extern int nrn_get_mechtype();
+ extern int nrn_get_mechtype();
 extern void hoc_register_prop_size(int, int, int);
 extern Memb_func* memb_func;
  static int _pointtype;
@@ -152,18 +170,35 @@ extern Memb_func* memb_func;
  /* declare global and static user variables */
 #define Rc Rc_NMDA10_2
  double Rc = 0.0916;
+ #pragma acc declare copyin (Rc)
 #define Ro Ro_NMDA10_2
  double Ro = 0.0465;
+ #pragma acc declare copyin (Ro)
 #define Rr Rr_NMDA10_2
  double Rr = 0.0018;
+ #pragma acc declare copyin (Rr)
 #define Rd Rd_NMDA10_2
  double Rd = 0.0084;
+ #pragma acc declare copyin (Rd)
 #define Ru Ru_NMDA10_2
  double Ru = 0.0055;
+ #pragma acc declare copyin (Ru)
 #define Rb Rb_NMDA10_2
  double Rb = 5;
+ #pragma acc declare copyin (Rb)
 #define mg mg_NMDA10_2
  double mg = 1;
+ #pragma acc declare copyin (mg)
+ 
+static void _acc_globals_update() {
+ #pragma acc update device (Rc) if(nrn_threads->compute_gpu)
+ #pragma acc update device (Ro) if(nrn_threads->compute_gpu)
+ #pragma acc update device (Rr) if(nrn_threads->compute_gpu)
+ #pragma acc update device (Rd) if(nrn_threads->compute_gpu)
+ #pragma acc update device (Ru) if(nrn_threads->compute_gpu)
+ #pragma acc update device (Rb) if(nrn_threads->compute_gpu)
+ #pragma acc update device (mg) if(nrn_threads->compute_gpu)
+ }
  
 #if 0 /*BBCORE*/
  /* some parameters have upper and lower limits */
@@ -207,8 +242,6 @@ extern Memb_func* memb_func;
  static double O0 = 0;
  static double delta_t = 1;
  static double v = 0;
- 
-#if 0 /*BBCORE*/
  /* connect global user variables to hoc */
  static DoubScal hoc_scdoub[] = {
  "mg_NMDA10_2", &mg_NMDA10_2,
@@ -223,14 +256,12 @@ extern Memb_func* memb_func;
  static DoubVec hoc_vdoub[] = {
  0,0,0
 };
- 
-#endif /*BBCORE*/
  static double _sav_indep;
  static void nrn_alloc(double*, Datum*, int);
-static void  nrn_init(_NrnThread*, _Memb_list*, int);
-static void nrn_state(_NrnThread*, _Memb_list*, int);
- static void nrn_cur(_NrnThread*, _Memb_list*, int);
- static void  nrn_jacob(_NrnThread*, _Memb_list*, int);
+void  nrn_init(_NrnThread*, _Memb_list*, int);
+void nrn_state(_NrnThread*, _Memb_list*, int);
+ void nrn_cur(_NrnThread*, _Memb_list*, int);
+ void  nrn_jacob(_NrnThread*, _Memb_list*, int);
  
 #if 0 /*BBCORE*/
  static void _hoc_destroy_pnt(_vptr) void* _vptr; {
@@ -283,7 +314,7 @@ static void nrn_alloc(double* _p, Datum* _ppvar, int _type) {
  
 }
  static void _initlists();
- static void _net_receive(Point_process*, double*, double);
+ static void _net_receive(Point_process*, int, double);
  
 #define _psize 36
 #define _ppsize 2
@@ -310,8 +341,13 @@ extern void _cvode_abstol( Symbol**, double*, int);
   hoc_register_prop_size(_mechtype, _psize, _ppsize);
   hoc_register_dparam_semantics(_mechtype, 0, "area");
   hoc_register_dparam_semantics(_mechtype, 1, "pntproc");
+ 
+#if NET_RECEIVE_BUFFERING
+  hoc_register_net_receive_buffering(_net_buf_receive, _mechtype);
+#endif
  pnt_receive[_mechtype] = _net_receive;
  pnt_receive_size[_mechtype] = 1;
+ 	hoc_register_var(hoc_scdoub, hoc_vdoub, NULL);
  }
 static int _reset;
 static char *modelname = "detailed model of glutamate NMDA receptors";
@@ -326,25 +362,38 @@ static int rates(double);
  
 #define _MATELM1(_row,_col)	*(_getelm(_row + 1, _col + 1))
  
-#define _RHS1(_arg) _coef1[_arg + 1]
+#define _RHS1(_arg) _coef1[(_arg + 1)]
  static double *_coef1;
  
 #define _linmat1  1
+ extern void* nrn_cons_sparseobj(int, int, _Memb_list*, _threadargsproto_);
  static void* _sparseobj1;
  static void* _cvsparseobj1;
  
 static int _ode_spec1(_threadargsproto_);
-static int _ode_matsol1(_threadargsproto_);
- static int _slist1[10], _dlist1[10]; static double *_temp1;
- static int kstates();
+/*static int _ode_matsol1(_threadargsproto_);*/
  
-static int kstates ()
+#define _slist1 _slist1_NMDA10_2
+int* _slist1;
+#pragma acc declare create(_slist1)
+
+#define _dlist1 _dlist1_NMDA10_2
+int* _dlist1;
+#pragma acc declare create(_dlist1)
+ 
+/* _kinetic_ kstates _NMDA10_2 */
+#ifndef INSIDE_NMODL
+#define INSIDE_NMODL
+#endif
+#include "_kinderiv.h"
+ 
+int kstates ()
  {_reset=0;
  {
    double b_flux, f_flux, _term; int _i;
  {int _i; double _dt1 = 1.0/dt;
 for(_i=1;_i<10;_i++){
-  	_RHS1(_i) = -_dt1*(_p[_slist1[_i]] - _p[_dlist1[_i]]);
+  	_RHS1(_i) = -_dt1*(_p[_slist1[_i]*_STRIDE] - _p[_dlist1[_i]*_STRIDE]);
 	_MATELM1(_i, _i) = _dt1;
       
 } }
@@ -488,11 +537,70 @@ for(_i=1;_i<10;_i++){
    } return _reset;
  }
  
-static void _net_receive (Point_process* _pnt, double* _args, double _lflag) 
+#if NET_RECEIVE_BUFFERING 
+#undef t
+#define t _nrb_t
+static void _net_receive_kernel(double, Point_process*, int _weight_index, double _flag);
+static void _net_buf_receive(_NrnThread* _nt) {
+  if (!_nt->_ml_list) { return; }
+  _Memb_list* _ml = _nt->_ml_list[_mechtype];
+  if (!_ml) { return; }
+  NetReceiveBuffer_t* _nrb = _ml->_net_receive_buffer; 
+  int _di;
+  int stream_id = _nt->stream_id;
+  Point_process* _pnt = _nt->pntprocs;
+  int _pnt_length = _nt->n_pntproc - _nrb->_pnt_offset;
+  int _displ_cnt = _nrb->_displ_cnt;
+  _PRAGMA_FOR_NETRECV_ACC_LOOP_ 
+  for (_di = 0; _di < _displ_cnt; ++_di) {
+    int _inrb;
+    int _di0 = _nrb->_displ[_di];
+    int _di1 = _nrb->_displ[_di + 1];
+    for (_inrb = _di0; _inrb < _di1; ++_inrb) {
+      int _i = _nrb->_nrb_index[_inrb];
+      int _j = _nrb->_pnt_index[_i];
+      int _k = _nrb->_weight_index[_i];
+      double _nrt = _nrb->_nrb_t[_i];
+      double _nrflag = _nrb->_nrb_flag[_i];
+      _net_receive_kernel(_nrt, _pnt + _j, _k, _nrflag);
+    }
+  }
+  #pragma acc wait(stream_id)
+  _nrb->_displ_cnt = 0;
+  _nrb->_cnt = 0;
+  /*printf("_net_buf_receive__NMDA10_2  %d\n", _nt->_id);*/
+ 
+}
+ 
+static void _net_receive (Point_process* _pnt, int _weight_index, double _lflag) {
+  _NrnThread* _nt = nrn_threads + _pnt->_tid;
+  NetReceiveBuffer_t* _nrb = _nt->_ml_list[_mechtype]->_net_receive_buffer;
+  if (_nrb->_cnt >= _nrb->_size){
+    realloc_net_receive_buffer(_nt, _nt->_ml_list[_mechtype]);
+  }
+  _nrb->_pnt_index[_nrb->_cnt] = _pnt - _nt->pntprocs;
+  _nrb->_weight_index[_nrb->_cnt] = _weight_index;
+  _nrb->_nrb_t[_nrb->_cnt] = _nt->_t;
+  _nrb->_nrb_flag[_nrb->_cnt] = _lflag;
+  ++_nrb->_cnt;
+}
+ 
+static void _net_receive_kernel(double _nrb_t, Point_process* _pnt, int _weight_index, double _lflag)
+#else
+ 
+static void _net_receive (Point_process* _pnt, int _weight_index, double _lflag) 
+#endif
+ 
 { 
-   _thread = (ThreadDatum*)0; _nt = nrn_threads + _pnt->_tid;
+   _NrnThread* _nt;
+   int _tid = _pnt->_tid; 
+   _nt = nrn_threads + _tid;
+   _thread = (ThreadDatum*)0; 
+   double *_weights = _nt->_weights;
+   _args = _weights + _weight_index;
    _ml = _nt->_ml_list[_pnt->_type];
-   _cntml = _ml->_nodecount;
+   _cntml_actual = _ml->_nodecount;
+   _cntml_padded = _ml->_nodecount_padded;
    _iml = _pnt->_i_instance;
 #if LAYOUT == 1 /*AoS*/
    _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
@@ -503,13 +611,21 @@ static void _net_receive (Point_process* _pnt, double* _args, double _lflag)
 #if LAYOUT > 1 /*AoSoA*/
 #error AoSoA not implemented.
 #endif
-  assert(_tsav <= t); _tsav = t; {
+  #if !defined(_OPENACC) 
+ assert(_tsav <= t); 
+ #endif 
+ _tsav = t; {
    if ( _lflag  == 0.0 ) {
      tRel = t ;
      synon = 1.0 ;
      w = _args[0] ;
      }
-   } }
+   } 
+#if NET_RECEIVE_BUFFERING
+#undef t
+#define t _nt->_t
+#endif
+ }
  
 static int  release (  double _lt ) {
    T = T_max * ( _lt - tRel ) / tau * exp ( 1.0 - ( _lt - tRel ) / tau ) * synon ;
@@ -751,15 +867,17 @@ static void initmodel() {
 }
 
 static void nrn_init(_NrnThread* _nt, _Memb_list* _ml, int _type){
-double _v; int* _ni; int _iml, _cntml;
+double _v; int* _ni; int _iml, _cntml_padded, _cntml_actual;
 #if CACHEVEC
     _ni = _ml->_nodeindices;
 #endif
-_cntml = _ml->_nodecount;
-for (_iml = 0; _iml < _cntml; ++_iml) {
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
  _tsav = -1e20;
     _v = _vec_v[_nd_idx];
+    _PRCELLSTATE_V
  v = _v;
  initmodel();
 }}
@@ -774,14 +892,16 @@ static double _nrn_current(double _v){double _current=0.;v=_v;{ {
 }
 
 static void nrn_cur(_NrnThread* _nt, _Memb_list* _ml, int _type){
-int* _ni; double _rhs, _v; int _iml, _cntml;
+int* _ni; double _rhs, _v; int _iml, _cntml_padded, _cntml_actual;
 #if CACHEVEC
     _ni = _ml->_nodeindices;
 #endif
-_cntml = _ml->_nodecount;
-for (_iml = 0; _iml < _cntml; ++_iml) {
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
     _v = _vec_v[_nd_idx];
+    _PRCELLSTATE_V
  _g = _nrn_current(_v + .001);
  	{ _rhs = _nrn_current(_v);
  	}
@@ -793,27 +913,31 @@ for (_iml = 0; _iml < _cntml; ++_iml) {
 }}
 
 static void nrn_jacob(_NrnThread* _nt, _Memb_list* _ml, int _type){
-int* _ni; int _iml, _cntml;
+int* _ni; int _iml, _cntml_padded, _cntml_actual;
 #if CACHEVEC
     _ni = _ml->_nodeindices;
 #endif
-_cntml = _ml->_nodecount;
-for (_iml = 0; _iml < _cntml; ++_iml) {
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize;
 	VEC_D(_ni[_iml]) += _g;
  
 }}
 
 static void nrn_state(_NrnThread* _nt, _Memb_list* _ml, int _type){
-double _v = 0.0; int* _ni; int _iml, _cntml;
+double _v = 0.0; int* _ni; int _iml, _cntml_padded, _cntml_actual;
 #if CACHEVEC
     _ni = _ml->_nodeindices;
 #endif
-_cntml = _ml->_nodecount;
-for (_iml = 0; _iml < _cntml; ++_iml) {
+_cntml_actual = _ml->_nodecount;
+_cntml_padded = _ml->_nodecount_padded;
+for (_iml = 0; _iml < _cntml_actual; ++_iml) {
  _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;
     _v = _vec_v[_nd_idx];
+    _PRCELLSTATE_V
  v=_v;
+ _PRCELLSTATE_V
 {
  { error = sparse(&_sparseobj1, 10, _slist1, _dlist1, _p, &t, dt, kstates,&_coef1, _linmat1);
  if(error){fprintf(stderr,"at line 142 in file SynNMDA10_2.mod:\n\n"); nrn_complain(_p); abort_run(error);}
@@ -825,9 +949,13 @@ static void terminal(){}
 
 static void _initlists() {
  int _i; static int _first = 1;
- int _cntml=0;
+ int _cntml_actual=1;
+ int _cntml_padded=1;
  int _iml=0;
   if (!_first) return;
+ 
+ _slist1 = (int*)malloc(sizeof(int)*10);
+ _dlist1 = (int*)malloc(sizeof(int)*10);
  _slist1[0] = &(OB) - _p;  _dlist1[0] = &(DOB) - _p;
  _slist1[1] = &(CB2) - _p;  _dlist1[1] = &(DCB2) - _p;
  _slist1[2] = &(CB1) - _p;  _dlist1[2] = &(DCB1) - _p;
@@ -838,5 +966,8 @@ static void _initlists() {
  _slist1[7] = &(DB) - _p;  _dlist1[7] = &(DDB) - _p;
  _slist1[8] = &(D) - _p;  _dlist1[8] = &(DD) - _p;
  _slist1[9] = &(O) - _p;  _dlist1[9] = &(DO) - _p;
+ #pragma acc enter data copyin(_slist1[0:10])
+ #pragma acc enter data copyin(_dlist1[0:10])
+
 _first = 0;
 }

@@ -4,6 +4,9 @@
 MOD2C is NMODL to C adapted for [CoreNEURON simulator](https://github.com/BlueBrain/CoreNEURON).
 More information about NMODL can be found [here](https://www.neuron.yale.edu/neuron/static/docs/refman/nocmodl.html).
 
+This version supports GPU code generation using OpenACC. Use latest
+version of CoreNeuron.
+
 # Requirements
 * [CMake 2.8.9+](https://cmake.org/)
 * [Flex](http://flex.sourceforge.net)
@@ -36,4 +39,3 @@ like BG-Q, Cray, Intel MIC etc.
 To facilitate the future distributions of the software the Blue Brain Project wishes to remain the sole
 owner of the copyright. Therefore we will ask contributors to not modify the existing copyright.
 Contributors will however be gratefully acknowledged in the corresponding CREDIT.txt file.
-
