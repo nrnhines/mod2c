@@ -3075,8 +3075,8 @@ insertstr(qend, "\
 		Symbol* vsym = lookup("v");
 		for (q = qstmt; q != qend; q = q->next) {
 			if (q->itemtype == SYMBOL && SYM(q) == vsym) {
-				insertstr(qstmt, " v = NODEV(_pnt->node);\n");
-				insertstr(qend, "\n NODEV(_pnt->node) = v;\n");
+				insertstr(qstmt, " v = VEC_V(_ml->_nodeindices[_iml]);\n");
+				insertstr(qend, "\n VEC_V(_ml->_nodeindices[_iml]) = v;\n");
 				break;
 			}
 		}
