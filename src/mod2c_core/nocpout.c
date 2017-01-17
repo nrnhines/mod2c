@@ -882,9 +882,9 @@ diag("No statics allowed for thread safe models:", s->name);
 
 	Lappendstr(defs_list, "static double _sav_indep;\n");
 	if (ba_index_ > 0) {
-		Lappendstr(defs_list, "static void _ba1()");
+		Lappendstr(defs_list, "static void _ba1(_NrnThread*, _Memb_list*, int)");
 		for (i=2; i <= ba_index_; ++i) {
-			sprintf(buf, ", _ba%d()", i);
+			sprintf(buf, ", _ba%d(_NrnThread*, _Memb_list*, int)", i);
 			Lappendstr(defs_list, buf);
 		}
 		Lappendstr(defs_list, ";\n");
@@ -1461,6 +1461,7 @@ located in a section and is not associated with an integrator\n"
 	for (i = 1; i <= ba_index_; ++i) {
 		List* lst;
 		q = q->next;
+#if 0
                 if (electrode_current) {
 			insertstr(ITM(q), " \
 #if EXTRACELLULAR\n\
@@ -1474,6 +1475,7 @@ if (_nd->_extnode) {\n\
 		}else{
 			insertstr(ITM(q), " v = NODEV(_nd);\n");
 		}
+#endif
 		lst = get_ion_variables(0);
 		if (lst->next != lst->prev) {
 			move(lst->next, lst->prev, ITM(q));
@@ -1936,11 +1938,36 @@ void bablk(ba, type, q1, q2)
 	if (!ba_list_) {
 		ba_list_ = newlist();
 	}
-	sprintf(buf, "static void _ba%d(Node*_nd, double* _pp, Datum* _ppd, ThreadDatum* _thread, _NrnThread* _nt) ", ++ba_index_);
+	sprintf(buf, "static void _ba%d(_NrnThread* _nt, _Memb_list* _ml, int _type) ", ++ba_index_);
 	insertstr(q1, buf);
 	q = q1->next;
-	vectorize_substitute(insertstr(q, ""), "double* _p; Datum* _ppvar;");
-	qv = insertstr(q, "_p = _pp; _ppvar = _ppd;\n");
+
+	qv = insertstr(q, ""
+"  double* _p; Datum* _ppvar; ThreadDatum* _thread;\n"
+"  int* _ni; double v; int _iml, _cntml_padded, _cntml_actual;\n"
+"  _cntml_actual = _ml->_nodecount;\n"
+"  _cntml_padded = _ml->_nodecount_padded;\n"
+"  _ni = _ml->_nodeindices;\n"
+"  _thread = _ml->_thread;\n"
+"  double * _nt_data = _nt->_data;\n"
+"  double * _vec_v = _nt->_actual_v;\n"
+"  int stream_id = _nt->stream_id;\n"
+"  #if LAYOUT == 1 /*AoS*/\n"
+"  for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n"
+"    _p = _ml->_data + _iml*_psize; _ppvar = _ml->_pdata + _iml*_ppsize;\n"
+"  #elif LAYOUT == 0 /*SoA*/\n"
+"    _p = _ml->_data; _ppvar = _ml->_pdata;\n"
+"  /* insert compiler dependent ivdep like pragma */\n"
+"  _PRAGMA_FOR_VECTOR_LOOP_\n"
+"  _PRAGMA_FOR_STATE_ACC_LOOP_\n"
+"  for (_iml = 0; _iml < _cntml_actual; ++_iml) {\n"
+"  #else /* LAYOUT > 1 */ /*AoSoA*/\n"
+"  #error AoSoA not implemented.\n"
+"  for (;;) { /* help clang-format properly indent */\n"
+"  #endif\n"
+"    v = _vec_v[_ni[_iml]];\n"
+);
+	insertstr(q2, "}\n");
 	movelist(qb, q2, procfunc);
 
 	ba = (ba == BEFORE) ? 10 : 20; /* BEFORE or AFTER */
