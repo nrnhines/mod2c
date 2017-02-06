@@ -822,6 +822,7 @@ void c_out_vectorize(const char* prefix)
 
   if (net_send_buffer_in_initial && !artificial_cell) {
     P("\
+\n#if NET_RECEIVE_BUFFERING\
 \n  NetSendBuffer_t* _nsb = _ml->_net_send_buffer;\
 \n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
 \n  #pragma acc wait(stream_id)\
@@ -837,6 +838,7 @@ void c_out_vectorize(const char* prefix)
 \n  _nsb->_cnt = 0;\
 \n#if defined(_OPENACC) && !defined(DISABLE_OPENACC)\
 \n  #pragma acc update device(_nsb->_cnt) if(_nt->compute_gpu)\
+\n#endif\
 \n#endif\
 \n");
         }

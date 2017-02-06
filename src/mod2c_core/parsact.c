@@ -48,6 +48,7 @@ extern List* state_discon_list_;
 extern int net_send_seen_;
 extern int net_event_seen_;
 extern int watch_seen_;
+extern List* watch_data_;
 #endif
 
 int protect_;
@@ -58,14 +59,12 @@ extern int artificial_cell;
 extern int vectorize;
 extern int assert_threadsafe;
 
-static int type_change();
+static int type_change(Symbol*, int);
 
 static long previous_subtype;	/* subtype at the sym->level */
 static char *previous_str;	/* u.str on last install */
 
-void explicit_decl(level, q)
-	int level;
-	Item *q;
+void explicit_decl(int level, Item* q)
 {
 	/* used to be inside parse1.y without the lastvars condition
 	   Without the condition it served two purposes.
@@ -137,8 +136,7 @@ void explicit_decl(level, q)
 one producing a message. Notice that multiple declarations at level 0 are
 caught as errors in the function above. */
 
-static int type_change(sym, level) /*return 1 if type change, 0 otherwise*/
-	Symbol *sym;
+static int type_change(Symbol* sym, int level) /*return 1 if type change, 0 otherwise*/
 {
 	long s, d, c;
 	
@@ -173,9 +171,7 @@ Fprintf(stderr, "Notice: %s is promoted from a PARAMETER to an ASSIGNED\n", sym-
 	return 1;
 }
 	
-void parm_array_install(n, num, units, limits, index)
-	Symbol         *n;
-	char           *num, *units, *limits;
+void parm_array_install(Symbol* n, char* num, char* units, char* limits, int index)
 {
 	char buf[NRN_BUFSIZE];
 
@@ -1220,10 +1216,12 @@ void watchstmt(par1, dir, par2, flag, blocktype )Item *par1, *dir, *par2, *flag;
 {
 	if (!watch_seen_) {
 		++watch_seen_;
+		watch_data_ = newlist();
 	}
 	if (blocktype != NETRECEIVE) {
 		diag("\"WATCH\" statement only allowed in NET_RECEIVE block", (char*)0);
 	}
+#if 0
 	sprintf(buf, "\nstatic double _watch%d_cond(_pnt) Point_process* _pnt; {\n",
 		watch_seen_);
 	lappendstr(procfunc, buf);
@@ -1243,6 +1241,15 @@ void watchstmt(par1, dir, par2, flag, blocktype )Item *par1, *dir, *par2, *flag;
  "  _nrn_watch_activate(_watch_array, _watch%d_cond, %d, _pnt, _watch_rm++, %s);\n",
 		watch_seen_, watch_seen_, STR(flag));
 	replacstr(flag, buf);
+#endif
+	sprintf(buf, "_nrn_watch_activate(%d) ", watch_seen_);
+	insertstr(par1, buf);
+	insertstr(flag, "; /*");
+	insertstr(flag->next, "*/\n");
+	lappenditem(watch_data_, par1);
+	lappenditem(watch_data_, par2);
+	lappenditem(watch_data_, flag);
+
 	++watch_seen_;
 }
 
