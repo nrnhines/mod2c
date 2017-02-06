@@ -65,7 +65,7 @@ int derivimplic_listnum;
 void solv_diffeq(qsol, fun, method, numeqn, listnum, steadystate, btype)
 	Item *qsol;
 	Symbol *fun, *method;
-	int numeqn, listnum;
+	int numeqn, listnum, steadystate;
 	int btype;
 {
 	char *maxerr_str, dindepname[50];
@@ -501,6 +501,7 @@ static int matchused = 0;	/* set when MATCH seen */
 /* args are --- derivblk: DERIVATIVE NAME stmtlist '}' */
 void massagederiv(q1, q2, q3, q4, sensused)
 	Item *q1, *q2, *q3, *q4;
+    int sensused;
 {
 	int count = 0, deriv_implicit, deriv_implicit_really, solve_seen;
 	char units[50];
@@ -1047,6 +1048,7 @@ void copyitems(q1, q2, qdest) /* copy items before item */
 		switch(q->itemtype) {
 
 		case STRING:
+        case VERBATIM:
 			Linsertstr(qdest, STR(q));
 			break;
 		case SYMBOL:
