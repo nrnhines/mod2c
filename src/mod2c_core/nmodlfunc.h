@@ -56,7 +56,7 @@ void prn();
 void cvode_kinetic();
 void single_channel();
 void freelist();
-void delete();
+void delete ();
 void deltokens();
 void move();
 void movelist();
